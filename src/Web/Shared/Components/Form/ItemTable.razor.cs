@@ -69,6 +69,18 @@ public partial class ItemTable<TItem>
         }
     }
 
+    /// <summary>
+    /// Gets the filtered items in the display order.
+    /// </summary>
+    private IEnumerable<(string Name, Guid Id, TItem Item)> OrderedFilteredItems
+    {
+        get
+        {
+            var items = this.FilteredItems.Select(i => (Name: i.GetName(), Id: i.GetId(), Item: i));
+            return this._isInlineEditable ? items : items.OrderBy(i => i.Name);
+        }
+    }
+
     /// <inheritdoc />
     protected override void OnInitialized()
     {
