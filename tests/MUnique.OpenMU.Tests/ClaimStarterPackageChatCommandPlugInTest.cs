@@ -4,6 +4,7 @@
 
 namespace MUnique.OpenMU.Tests;
 
+using Moq;
 using MUnique.OpenMU.DataModel.Configuration;
 using MUnique.OpenMU.DataModel.Configuration.Items;
 using MUnique.OpenMU.GameLogic;
@@ -102,21 +103,72 @@ public class ClaimStarterPackageChatCommandPlugInTest
         Assert.That(player.SelectedCharacter.Inventory.Money, Is.Zero);
     }
 
+    /// <summary>
+    /// Verifies that the previous flat configuration is migrated to grouped packages.
+    /// </summary>
+    [Test]
+    public async ValueTask ClaimMigratesLegacyFlatConfigurationAsync()
+    {
+        var player = await PlayerTestHelper.CreatePlayerAsync().ConfigureAwait(false);
+        player.GameContext.Configuration.MaximumInventoryMoney = int.MaxValue;
+        player.SelectedCharacter!.CharacterClass!.Number = 4;
+        AddDefinitions(player.GameContext.Configuration, player.SelectedCharacter.CharacterClass);
+        var configuration = new ClaimStarterPackageChatCommandPlugIn.StarterPackageConfiguration
+        {
+            Money = 10_000,
+            Items =
+            [
+                new() { Group = 14, Number = 1, Durability = 5 },
+                new() { CharacterClassNumber = 4, Group = 1, Number = 0, Level = 3 },
+            ],
+            Skills =
+            [
+                new() { CharacterClassNumber = 4, Number = 17 },
+            ],
+        };
+        var plugIn = new ClaimStarterPackageChatCommandPlugIn
+        {
+            Configuration = configuration,
+        };
+
+        await plugIn.HandleCommandAsync(player, "/starter").ConfigureAwait(false);
+
+        Assert.That(player.Account!.HasReceivedStarterPackage, Is.True);
+        Assert.That(configuration.Packages, Has.Count.EqualTo(2));
+        Assert.That(configuration.Packages.Any(package => package.CharacterClassNumber is null && package.Money == 10_000 && package.Items.Count == 1), Is.True);
+        Assert.That(configuration.Packages.Any(package => package.CharacterClassNumber == 4 && package.Items.Count == 1 && package.Skills.Count == 1), Is.True);
+        Assert.That(configuration.Items, Is.Null);
+        Assert.That(configuration.Skills, Is.Null);
+    }
+
     private static ClaimStarterPackageChatCommandPlugIn CreatePlugIn()
     {
         return new ClaimStarterPackageChatCommandPlugIn
         {
             Configuration = new ClaimStarterPackageChatCommandPlugIn.StarterPackageConfiguration
             {
-                Money = 10_000,
-                Items =
+                Packages =
                 [
-                    new() { Group = 14, Number = 1, Durability = 5 },
-                    new() { CharacterClassNumber = 4, Group = 1, Number = 0, Level = 3 },
-                ],
-                Skills =
-                [
-                    new() { CharacterClassNumber = 4, Number = 17 },
+                    new()
+                    {
+                        Money = 10_000,
+                        Items =
+                        [
+                            new() { Group = 14, Number = 1, Durability = 5 },
+                        ],
+                    },
+                    new()
+                    {
+                        CharacterClassNumber = 4,
+                        Items =
+                        [
+                            new() { Group = 1, Number = 0, Level = 3 },
+                        ],
+                        Skills =
+                        [
+                            new() { Number = 17 },
+                        ],
+                    },
                 ],
             },
         };
@@ -130,12 +182,12 @@ public class ClaimStarterPackageChatCommandPlugInTest
             configuration.Items.Add(CreateItemDefinition(1, 0, "Small Axe", durability: 18));
         }
 
-        var skill = new MUnique.OpenMU.Persistence.BasicModel.Skill
-        {
-            Number = 17,
-            Name = "Energy Ball",
-        };
-        skill.QualifiedCharacters.Add(characterClass);
+        var skillMock = new Mock<Skill>();
+        skillMock.SetupAllProperties();
+        skillMock.Setup(s => s.QualifiedCharacters).Returns(new List<CharacterClass> { characterClass });
+        var skill = skillMock.Object;
+        skill.Number = 17;
+        skill.Name = "Energy Ball";
         configuration.Skills.Add(skill);
     }
 

@@ -7,6 +7,7 @@ namespace MUnique.OpenMU.GameLogic.PlugIns.ChatCommands;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Runtime.InteropServices;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using MUnique.OpenMU.DataModel;
 using MUnique.OpenMU.DataModel.Composition;
@@ -55,6 +56,31 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
     public override CharacterStatus MinCharacterStatusRequirement => CharacterStatus.Normal;
 
     /// <inheritdoc />
+    public object CreateDefaultConfig()
+    {
+        return new StarterPackageConfiguration
+        {
+            Packages =
+            [
+                StarterPackage.ForAll(
+                    money: 50_000,
+                    items:
+                    [
+                        StarterItem.Create(Misc2Group, 1, durability: 10),
+                        StarterItem.Create(Misc2Group, 4, durability: 10),
+                    ]),
+                StarterPackage.ForClass(DarkKnightClassNumber, items: [StarterItem.Create(AxesGroup, 0, level: 3)]),
+                StarterPackage.ForClass(DarkWizardClassNumber, items: [StarterItem.Create(StaffGroup, 0, level: 3)], skills: [StarterSkill.Create(EnergyBallSkillNumber)]),
+                StarterPackage.ForClass(FairyElfClassNumber, items: [StarterItem.Create(BowsGroup, 0, level: 3), StarterItem.Create(BowsGroup, 15, durability: 255)], skills: [StarterSkill.Create(StarfallSkillNumber)]),
+                StarterPackage.ForClass(MagicGladiatorClassNumber, items: [StarterItem.Create(SwordsGroup, 1, level: 3)]),
+                StarterPackage.ForClass(DarkLordClassNumber, items: [StarterItem.Create(SwordsGroup, 1, level: 3)]),
+                StarterPackage.ForClass(SummonerClassNumber, items: [StarterItem.Create(StaffGroup, 14, level: 3)], skills: [StarterSkill.Create(LanceSkillNumber)]),
+                StarterPackage.ForClass(RageFighterClassNumber, items: [StarterItem.Create(SwordsGroup, 32, level: 3)], skills: [StarterSkill.Create(ChargeSkillNumber)]),
+            ],
+        };
+    }
+
+    /// <inheritdoc />
     protected override async ValueTask DoHandleCommandAsync(Player player, EmptyChatCommandArgs arguments)
     {
         using var logScope = player.Logger.BeginScope(this.GetType());
@@ -91,16 +117,19 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
             return;
         }
 
-        var items = configuration.Items.Where(item => item.IsForCharacterClass(characterClassNumber)).ToList();
-        var skills = configuration.Skills.Where(skill => skill.IsForCharacterClass(characterClassNumber)).ToList();
-        if (items.Count == 0 && skills.Count == 0 && configuration.Money <= 0)
+        configuration.MigrateLegacyPackages();
+        var packages = configuration.GetPackagesForCharacterClass(characterClassNumber).ToList();
+        var items = packages.SelectMany(package => package.Items).ToList();
+        var skills = packages.SelectMany(package => package.Skills).ToList();
+        var money = packages.Sum(package => package.Money);
+        if (items.Count == 0 && skills.Count == 0 && money <= 0)
         {
             player.Logger.LogDebug("No starter package configured for character class {CharacterClassNumber}.", characterClassNumber);
             await player.ShowBlueMessageAsync("There is no starter package configured for this character class.").ConfigureAwait(false);
             return;
         }
 
-        if (!this.TryAddPackage(player, createdCharacter, items, skills, configuration.Money))
+        if (!this.TryAddPackage(player, createdCharacter, items, skills, money))
         {
             await player.ShowBlueMessageAsync("The starter package could not be claimed. Please make sure you have enough inventory space.").ConfigureAwait(false);
             return;
@@ -112,35 +141,6 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
         await player.InvokeViewPlugInAsync<IUpdateMoneyPlugIn>(p => p.UpdateMoneyAsync()).ConfigureAwait(false);
         await player.InvokeViewPlugInAsync<ISkillListViewPlugIn>(p => p.UpdateSkillListAsync()).ConfigureAwait(false);
         await player.ShowBlueMessageAsync("Starter package claimed successfully.").ConfigureAwait(false);
-    }
-
-    /// <inheritdoc />
-    public object CreateDefaultConfig()
-    {
-        return new StarterPackageConfiguration
-        {
-            Money = 50_000,
-            Items =
-            [
-                StarterItem.ForClass(DarkKnightClassNumber, AxesGroup, 0, level: 3),
-                StarterItem.ForClass(DarkWizardClassNumber, StaffGroup, 0, level: 3),
-                StarterItem.ForClass(FairyElfClassNumber, BowsGroup, 0, level: 3),
-                StarterItem.ForClass(FairyElfClassNumber, BowsGroup, 15, durability: 255),
-                StarterItem.ForClass(MagicGladiatorClassNumber, SwordsGroup, 1, level: 3),
-                StarterItem.ForClass(DarkLordClassNumber, SwordsGroup, 1, level: 3),
-                StarterItem.ForClass(SummonerClassNumber, StaffGroup, 14, level: 3),
-                StarterItem.ForClass(RageFighterClassNumber, SwordsGroup, 32, level: 3),
-                StarterItem.ForAll(Misc2Group, 1, durability: 10),
-                StarterItem.ForAll(Misc2Group, 4, durability: 10),
-            ],
-            Skills =
-            [
-                StarterSkill.ForClass(DarkWizardClassNumber, EnergyBallSkillNumber),
-                StarterSkill.ForClass(FairyElfClassNumber, StarfallSkillNumber),
-                StarterSkill.ForClass(SummonerClassNumber, LanceSkillNumber),
-                StarterSkill.ForClass(RageFighterClassNumber, ChargeSkillNumber),
-            ],
-        };
     }
 
     private bool TryAddPackage(Player player, Character createdCharacter, IReadOnlyList<StarterItem> items, IReadOnlyList<StarterSkill> skills, int money)
@@ -265,12 +265,129 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
     /// <summary>
     /// The starter package configuration.
     /// </summary>
-    public class StarterPackageConfiguration
+    public class StarterPackageConfiguration : IJsonOnDeserialized
     {
         /// <summary>
         /// Gets or sets a value indicating whether the starter package is enabled.
         /// </summary>
         public bool IsEnabled { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets the configured starter packages.
+        /// </summary>
+        [ScaffoldColumn(true)]
+        [MemberOfAggregate]
+        public ICollection<StarterPackage> Packages { get; set; } = new List<StarterPackage>();
+
+        /// <summary>
+        /// Gets or sets the legacy money which is migrated into the common package.
+        /// </summary>
+        [Browsable(false)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public int Money { get; set; }
+
+        /// <summary>
+        /// Gets or sets the legacy starter items which are migrated into grouped packages.
+        /// </summary>
+        [Browsable(false)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public ICollection<StarterItem>? Items { get; set; }
+
+        /// <summary>
+        /// Gets or sets the legacy starter skills which are migrated into grouped packages.
+        /// </summary>
+        [Browsable(false)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public ICollection<StarterSkill>? Skills { get; set; }
+
+        /// <inheritdoc />
+        public void OnDeserialized()
+        {
+            this.MigrateLegacyPackages();
+        }
+
+        /// <summary>
+        /// Gets the packages which apply to the specified character class.
+        /// </summary>
+        /// <param name="characterClassNumber">The character class number.</param>
+        /// <returns>The matching packages.</returns>
+        internal IEnumerable<StarterPackage> GetPackagesForCharacterClass(int characterClassNumber)
+        {
+            return this.Packages.Where(package => package.IsForCharacterClass(characterClassNumber));
+        }
+
+        /// <summary>
+        /// Migrates the previous flat configuration fields into grouped starter packages.
+        /// </summary>
+        internal void MigrateLegacyPackages()
+        {
+            var legacyItems = this.Items ?? [];
+            var legacySkills = this.Skills ?? [];
+            if (this.Packages.Count > 0 || (this.Money <= 0 && legacyItems.Count == 0 && legacySkills.Count == 0))
+            {
+                return;
+            }
+
+            var packages = new List<StarterPackage>();
+
+            StarterPackage GetOrCreatePackage(int? characterClassNumber)
+            {
+                if (packages.FirstOrDefault(p => p.CharacterClassNumber == characterClassNumber) is { } package)
+                {
+                    return package;
+                }
+
+                package = new StarterPackage { CharacterClassNumber = characterClassNumber };
+                packages.Add(package);
+                return package;
+            }
+
+            if (this.Money > 0)
+            {
+                GetOrCreatePackage(null).Money = this.Money;
+            }
+
+            foreach (var item in legacyItems)
+            {
+                GetOrCreatePackage(item.CharacterClassNumber).Items.Add(item);
+                item.CharacterClassNumber = null;
+            }
+
+            foreach (var skill in legacySkills)
+            {
+                var characterClassNumber = skill.CharacterClassNumber;
+                if (characterClassNumber is null)
+                {
+                    continue;
+                }
+
+                GetOrCreatePackage(characterClassNumber).Skills.Add(skill);
+                skill.CharacterClassNumber = null;
+            }
+
+            this.Packages = packages;
+            this.Money = 0;
+            this.Items = null;
+            this.Skills = null;
+        }
+    }
+
+    /// <summary>
+    /// A configured starter package for a character class.
+    /// </summary>
+    public class StarterPackage
+    {
+        /// <summary>
+        /// Gets the display name.
+        /// </summary>
+        [Browsable(false)]
+        public string Name => this.CharacterClassNumber is null ? "All classes" : $"Class {this.CharacterClassNumber}";
+
+        /// <summary>
+        /// Gets or sets the character class number. If it's null, this package is added for every class.
+        /// </summary>
+        [Display(Name = "Character Class")]
+        public int? CharacterClassNumber { get; set; }
 
         /// <summary>
         /// Gets or sets the money which is added to the receiving character inventory.
@@ -290,6 +407,41 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
         [ScaffoldColumn(true)]
         [MemberOfAggregate]
         public ICollection<StarterSkill> Skills { get; set; } = new List<StarterSkill>();
+
+        /// <summary>
+        /// Creates a starter package for a specific character class.
+        /// </summary>
+        /// <param name="characterClassNumber">The character class number.</param>
+        /// <param name="items">The starter items.</param>
+        /// <param name="skills">The starter skills.</param>
+        /// <param name="money">The starter money.</param>
+        /// <returns>The starter package.</returns>
+        internal static StarterPackage ForClass(byte characterClassNumber, ICollection<StarterItem>? items = null, ICollection<StarterSkill>? skills = null, int money = 0)
+        {
+            return new StarterPackage { CharacterClassNumber = characterClassNumber, Money = money, Items = items ?? [], Skills = skills ?? [] };
+        }
+
+        /// <summary>
+        /// Creates a starter package which applies to all character classes.
+        /// </summary>
+        /// <param name="items">The starter items.</param>
+        /// <param name="skills">The starter skills.</param>
+        /// <param name="money">The starter money.</param>
+        /// <returns>The starter package.</returns>
+        internal static StarterPackage ForAll(ICollection<StarterItem>? items = null, ICollection<StarterSkill>? skills = null, int money = 0)
+        {
+            return new StarterPackage { Money = money, Items = items ?? [], Skills = skills ?? [] };
+        }
+
+        /// <summary>
+        /// Determines whether this package applies to the specified character class.
+        /// </summary>
+        /// <param name="characterClassNumber">The character class number.</param>
+        /// <returns><c>true</c> if this package applies; otherwise, <c>false</c>.</returns>
+        internal bool IsForCharacterClass(int characterClassNumber)
+        {
+            return this.CharacterClassNumber is null || this.CharacterClassNumber == characterClassNumber;
+        }
     }
 
     /// <summary>
@@ -301,11 +453,13 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
         /// Gets the display name.
         /// </summary>
         [Browsable(false)]
-        public string Name => $"Class {this.CharacterClassNumber?.ToString() ?? "All"}: item {this.Group}/{this.Number} +{this.Level}";
+        public string Name => $"Item {this.Group}/{this.Number} +{this.Level}";
 
         /// <summary>
-        /// Gets or sets the character class number. If it's null, the item is added for every class.
+        /// Gets or sets the legacy character class number.
         /// </summary>
+        [Browsable(false)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public int? CharacterClassNumber { get; set; }
 
         /// <summary>
@@ -328,19 +482,17 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
         /// </summary>
         public byte? Durability { get; set; }
 
-        internal static StarterItem ForClass(byte characterClassNumber, byte group, byte number, byte level = 0, byte? durability = null)
-        {
-            return new StarterItem { CharacterClassNumber = characterClassNumber, Group = group, Number = number, Level = level, Durability = durability };
-        }
-
-        internal static StarterItem ForAll(byte group, byte number, byte level = 0, byte? durability = null)
+        /// <summary>
+        /// Creates a starter item.
+        /// </summary>
+        /// <param name="group">The item group.</param>
+        /// <param name="number">The item number.</param>
+        /// <param name="level">The item level.</param>
+        /// <param name="durability">The item durability.</param>
+        /// <returns>The starter item.</returns>
+        internal static StarterItem Create(byte group, byte number, byte level = 0, byte? durability = null)
         {
             return new StarterItem { Group = group, Number = number, Level = level, Durability = durability };
-        }
-
-        internal bool IsForCharacterClass(int characterClassNumber)
-        {
-            return this.CharacterClassNumber is null || this.CharacterClassNumber == characterClassNumber;
         }
     }
 
@@ -353,26 +505,28 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
         /// Gets the display name.
         /// </summary>
         [Browsable(false)]
-        public string Name => $"Class {this.CharacterClassNumber}: skill {this.Number}";
+        public string Name => $"Skill {this.Number}";
 
         /// <summary>
-        /// Gets or sets the character class number.
+        /// Gets or sets the legacy character class number.
         /// </summary>
-        public int CharacterClassNumber { get; set; }
+        [Browsable(false)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? CharacterClassNumber { get; set; }
 
         /// <summary>
         /// Gets or sets the skill number.
         /// </summary>
         public int Number { get; set; }
 
-        internal static StarterSkill ForClass(byte characterClassNumber, int skillNumber)
+        /// <summary>
+        /// Creates a starter skill.
+        /// </summary>
+        /// <param name="skillNumber">The skill number.</param>
+        /// <returns>The starter skill.</returns>
+        internal static StarterSkill Create(int skillNumber)
         {
-            return new StarterSkill { CharacterClassNumber = characterClassNumber, Number = skillNumber };
-        }
-
-        internal bool IsForCharacterClass(int characterClassNumber)
-        {
-            return this.CharacterClassNumber == characterClassNumber;
+            return new StarterSkill { Number = skillNumber };
         }
     }
 }
