@@ -11,6 +11,8 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using MUnique.OpenMU.DataModel;
 using MUnique.OpenMU.DataModel.Composition;
+using MUnique.OpenMU.DataModel.Configuration;
+using MUnique.OpenMU.DataModel.Configuration.Items;
 using MUnique.OpenMU.DataModel.Entities;
 using MUnique.OpenMU.GameLogic.PlugIns.ChatCommands.Arguments;
 using MUnique.OpenMU.GameLogic.Views.Character;
@@ -208,7 +210,8 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
 
     private Item? CreateItem(Player player, StarterItem itemConfiguration)
     {
-        if (player.GameContext.Configuration.Items.FirstOrDefault(def => def.Group == itemConfiguration.Group && def.Number == itemConfiguration.Number) is not { } itemDefinition)
+        if ((itemConfiguration.ItemDefinition
+             ?? player.GameContext.Configuration.Items.FirstOrDefault(def => def.Group == itemConfiguration.Group && def.Number == itemConfiguration.Number)) is not { } itemDefinition)
         {
             player.Logger.LogWarning("Unknown starter item, group {Group}, number {Number}.", itemConfiguration.Group, itemConfiguration.Number);
             return null;
@@ -229,8 +232,8 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
             return null;
         }
 
-        var skillDefinition = player.GameContext.Configuration.Skills.FirstOrDefault(s => s.Number == skillConfiguration.Number);
-        if (skillDefinition is null)
+        if ((skillConfiguration.Skill
+             ?? player.GameContext.Configuration.Skills.FirstOrDefault(s => s.Number == skillConfiguration.Number)) is not { } skillDefinition)
         {
             player.Logger.LogWarning("Unknown starter skill, number {SkillNumber}.", skillConfiguration.Number);
             return null;
@@ -381,12 +384,19 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
         /// Gets the display name.
         /// </summary>
         [Browsable(false)]
-        public string Name => this.CharacterClassNumber is null ? "All classes" : $"Class {this.CharacterClassNumber}";
+        public string Name => this.CharacterClass?.Name ?? (this.CharacterClassNumber is null ? "All classes" : $"Class {this.CharacterClassNumber}");
 
         /// <summary>
-        /// Gets or sets the character class number. If it's null, this package is added for every class.
+        /// Gets or sets the character class. If it's null, this package is added for every class unless a legacy class number is set.
         /// </summary>
         [Display(Name = "Character Class")]
+        public CharacterClass? CharacterClass { get; set; }
+
+        /// <summary>
+        /// Gets or sets the legacy character class number.
+        /// </summary>
+        [Browsable(false)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public int? CharacterClassNumber { get; set; }
 
         /// <summary>
@@ -440,7 +450,12 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
         /// <returns><c>true</c> if this package applies; otherwise, <c>false</c>.</returns>
         internal bool IsForCharacterClass(int characterClassNumber)
         {
-            return this.CharacterClassNumber is null || this.CharacterClassNumber == characterClassNumber;
+            if (this.CharacterClass is null && this.CharacterClassNumber is null)
+            {
+                return true;
+            }
+
+            return this.CharacterClass?.Number == characterClassNumber || this.CharacterClassNumber == characterClassNumber;
         }
     }
 
@@ -453,7 +468,15 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
         /// Gets the display name.
         /// </summary>
         [Browsable(false)]
-        public string Name => $"Item {this.Group}/{this.Number} +{this.Level}";
+        public string Name => this.ItemDefinition is null
+            ? $"Item {this.Group}/{this.Number} +{this.Level}"
+            : $"{this.ItemDefinition.Name} +{this.Level}";
+
+        /// <summary>
+        /// Gets or sets the item definition.
+        /// </summary>
+        [Display(Name = "Item")]
+        public ItemDefinition? ItemDefinition { get; set; }
 
         /// <summary>
         /// Gets or sets the legacy character class number.
@@ -465,11 +488,15 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
         /// <summary>
         /// Gets or sets the item group.
         /// </summary>
+        [Browsable(false)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public byte Group { get; set; }
 
         /// <summary>
         /// Gets or sets the item number.
         /// </summary>
+        [Browsable(false)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public byte Number { get; set; }
 
         /// <summary>
@@ -505,7 +532,12 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
         /// Gets the display name.
         /// </summary>
         [Browsable(false)]
-        public string Name => $"Skill {this.Number}";
+        public string Name => this.Skill?.Name ?? $"Skill {this.Number}";
+
+        /// <summary>
+        /// Gets or sets the skill.
+        /// </summary>
+        public Skill? Skill { get; set; }
 
         /// <summary>
         /// Gets or sets the legacy character class number.
@@ -517,6 +549,8 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
         /// <summary>
         /// Gets or sets the skill number.
         /// </summary>
+        [Browsable(false)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public int Number { get; set; }
 
         /// <summary>

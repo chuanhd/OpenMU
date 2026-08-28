@@ -40,6 +40,69 @@ public class ClaimStarterPackageChatCommandPlugInTest
     }
 
     /// <summary>
+    /// Verifies that the command accepts configuration references selected by the admin panel lookup fields.
+    /// </summary>
+    [Test]
+    public async ValueTask ClaimAddsPackageConfiguredWithReferencedObjectsAsync()
+    {
+        var player = await PlayerTestHelper.CreatePlayerAsync().ConfigureAwait(false);
+        player.GameContext.Configuration.MaximumInventoryMoney = int.MaxValue;
+        player.SelectedCharacter!.CharacterClass!.Number = 4;
+        player.SelectedCharacter.CharacterClass.Name = "Dark Knight";
+        AddDefinitions(player.GameContext.Configuration, player.SelectedCharacter.CharacterClass);
+        var commonItem = player.GameContext.Configuration.Items.First(item => item.Group == 14 && item.Number == 1);
+        var classItem = player.GameContext.Configuration.Items.First(item => item.Group == 1 && item.Number == 0);
+        var skill = player.GameContext.Configuration.Skills.First(item => item.Number == 17);
+        var otherClass = new CharacterClass { Number = 0, Name = "Dark Wizard" };
+        var plugIn = new ClaimStarterPackageChatCommandPlugIn
+        {
+            Configuration = new ClaimStarterPackageChatCommandPlugIn.StarterPackageConfiguration
+            {
+                Packages =
+                [
+                    new()
+                    {
+                        Money = 10_000,
+                        Items =
+                        [
+                            new() { ItemDefinition = commonItem, Durability = 5 },
+                        ],
+                    },
+                    new()
+                    {
+                        CharacterClass = player.SelectedCharacter.CharacterClass,
+                        Items =
+                        [
+                            new() { ItemDefinition = classItem, Level = 3 },
+                        ],
+                        Skills =
+                        [
+                            new() { Skill = skill },
+                        ],
+                    },
+                    new()
+                    {
+                        CharacterClass = otherClass,
+                        Items =
+                        [
+                            new() { ItemDefinition = commonItem, Level = 7 },
+                        ],
+                    },
+                ],
+            },
+        };
+
+        await plugIn.HandleCommandAsync(player, "/starter").ConfigureAwait(false);
+
+        Assert.That(player.Account!.HasReceivedStarterPackage, Is.True);
+        Assert.That(player.SelectedCharacter.Inventory!.Money, Is.EqualTo(10_000));
+        Assert.That(player.SelectedCharacter.Inventory.Items.Any(item => item.Definition == commonItem && item.Level == 0 && item.Durability == 5), Is.True);
+        Assert.That(player.SelectedCharacter.Inventory.Items.Any(item => item.Definition == classItem && item.Level == 3 && item.Durability == 18), Is.True);
+        Assert.That(player.SelectedCharacter.Inventory.Items.Any(item => item.Level == 7), Is.False);
+        Assert.That(player.SelectedCharacter.LearnedSkills.Select(entry => entry.Skill), Does.Contain(skill));
+    }
+
+    /// <summary>
     /// Verifies that the package can only be claimed once per account.
     /// </summary>
     [Test]
