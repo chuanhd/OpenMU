@@ -204,6 +204,50 @@ public class ClaimStarterPackageChatCommandPlugInTest
         Assert.That(configuration.Skills, Is.Null);
     }
 
+    /// <summary>
+    /// Verifies that predefined fallback values are resolved to object references for the admin panel.
+    /// </summary>
+    [Test]
+    public async ValueTask ResolveReferencesFillsPredefinedFallbackValues()
+    {
+        var player = await PlayerTestHelper.CreatePlayerAsync().ConfigureAwait(false);
+        var configuration = player.GameContext.Configuration;
+        var characterClass = player.SelectedCharacter!.CharacterClass!;
+        characterClass.Number = 4;
+        characterClass.Name = "Dark Knight";
+        if (!configuration.CharacterClasses.Contains(characterClass))
+        {
+            configuration.CharacterClasses.Add(characterClass);
+        }
+
+        AddDefinitions(configuration, characterClass);
+        var starterConfiguration = new ClaimStarterPackageChatCommandPlugIn.StarterPackageConfiguration
+        {
+            Packages =
+            [
+                new()
+                {
+                    CharacterClassNumber = 4,
+                    Items =
+                    [
+                        new() { Group = 1, Number = 0, Level = 3 },
+                    ],
+                    Skills =
+                    [
+                        new() { Number = 17 },
+                    ],
+                },
+            ],
+        };
+
+        starterConfiguration.ResolveReferences(configuration);
+
+        var package = starterConfiguration.Packages.Single();
+        Assert.That(package.CharacterClass, Is.SameAs(characterClass));
+        Assert.That(package.Items.Single().ItemDefinition, Is.SameAs(configuration.Items.Single(item => item.Group == 1 && item.Number == 0)));
+        Assert.That(package.Skills.Single().Skill, Is.SameAs(configuration.Skills.Single(skill => skill.Number == 17)));
+    }
+
     private static ClaimStarterPackageChatCommandPlugIn CreatePlugIn()
     {
         return new ClaimStarterPackageChatCommandPlugIn
