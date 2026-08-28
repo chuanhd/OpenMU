@@ -210,8 +210,10 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
 
     private Item? CreateItem(Player player, StarterItem itemConfiguration)
     {
-        if ((itemConfiguration.ItemDefinition
-             ?? player.GameContext.Configuration.Items.FirstOrDefault(def => def.Group == itemConfiguration.Group && def.Number == itemConfiguration.Number)) is not { } itemDefinition)
+        var fallbackItemDefinition = itemConfiguration.Group is { } group && itemConfiguration.Number is { } number
+            ? player.GameContext.Configuration.Items.FirstOrDefault(def => def.Group == group && def.Number == number)
+            : null;
+        if ((itemConfiguration.ItemDefinition ?? fallbackItemDefinition) is not { } itemDefinition)
         {
             player.Logger.LogWarning("Unknown starter item, group {Group}, number {Number}.", itemConfiguration.Group, itemConfiguration.Number);
             return null;
@@ -232,8 +234,10 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
             return null;
         }
 
-        if ((skillConfiguration.Skill
-             ?? player.GameContext.Configuration.Skills.FirstOrDefault(s => s.Number == skillConfiguration.Number)) is not { } skillDefinition)
+        var fallbackSkillDefinition = skillConfiguration.Number is { } skillNumber
+            ? player.GameContext.Configuration.Skills.FirstOrDefault(s => s.Number == skillNumber)
+            : null;
+        if ((skillConfiguration.Skill ?? fallbackSkillDefinition) is not { } skillDefinition)
         {
             player.Logger.LogWarning("Unknown starter skill, number {SkillNumber}.", skillConfiguration.Number);
             return null;
@@ -310,6 +314,38 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
         }
 
         /// <summary>
+        /// Resolves legacy fallback values to object references for the configuration UI.
+        /// </summary>
+        /// <param name="gameConfiguration">The game configuration.</param>
+        public void ResolveReferences(GameConfiguration gameConfiguration)
+        {
+            this.MigrateLegacyPackages();
+            foreach (var package in this.Packages)
+            {
+                if (package.CharacterClass is null && package.CharacterClassNumber is { } classNumber)
+                {
+                    package.CharacterClass = gameConfiguration.CharacterClasses.FirstOrDefault(characterClass => characterClass.Number == classNumber);
+                }
+
+                foreach (var item in package.Items)
+                {
+                    if (item.ItemDefinition is null && item.Group is { } group && item.Number is { } number)
+                    {
+                        item.ItemDefinition = gameConfiguration.Items.FirstOrDefault(itemDefinition => itemDefinition.Group == group && itemDefinition.Number == number);
+                    }
+                }
+
+                foreach (var skill in package.Skills)
+                {
+                    if (skill.Skill is null && skill.Number is { } skillNumber)
+                    {
+                        skill.Skill = gameConfiguration.Skills.FirstOrDefault(skillDefinition => skillDefinition.Number == skillNumber);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
         /// Gets the packages which apply to the specified character class.
         /// </summary>
         /// <param name="characterClassNumber">The character class number.</param>
@@ -380,6 +416,8 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
     /// </summary>
     public class StarterPackage
     {
+        private CharacterClass? _characterClass;
+
         /// <summary>
         /// Gets the display name.
         /// </summary>
@@ -390,7 +428,18 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
         /// Gets or sets the character class. If it's null, this package is added for every class unless a legacy class number is set.
         /// </summary>
         [Display(Name = "Character Class")]
-        public CharacterClass? CharacterClass { get; set; }
+        public CharacterClass? CharacterClass
+        {
+            get => this._characterClass;
+            set
+            {
+                this._characterClass = value;
+                if (value is not null)
+                {
+                    this.CharacterClassNumber = value.Number;
+                }
+            }
+        }
 
         /// <summary>
         /// Gets or sets the legacy character class number.
@@ -464,19 +513,33 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
     /// </summary>
     public class StarterItem
     {
+        private ItemDefinition? _itemDefinition;
+
         /// <summary>
         /// Gets the display name.
         /// </summary>
         [Browsable(false)]
         public string Name => this.ItemDefinition is null
-            ? $"Item {this.Group}/{this.Number} +{this.Level}"
+            ? $"Item {this.Group?.ToString() ?? "?"}/{this.Number?.ToString() ?? "?"} +{this.Level}"
             : $"{this.ItemDefinition.Name} +{this.Level}";
 
         /// <summary>
         /// Gets or sets the item definition.
         /// </summary>
         [Display(Name = "Item")]
-        public ItemDefinition? ItemDefinition { get; set; }
+        public ItemDefinition? ItemDefinition
+        {
+            get => this._itemDefinition;
+            set
+            {
+                this._itemDefinition = value;
+                if (value is not null)
+                {
+                    this.Group = value.Group;
+                    this.Number = value.Number;
+                }
+            }
+        }
 
         /// <summary>
         /// Gets or sets the legacy character class number.
@@ -489,15 +552,15 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
         /// Gets or sets the item group.
         /// </summary>
         [Browsable(false)]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        public byte Group { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public byte? Group { get; set; }
 
         /// <summary>
         /// Gets or sets the item number.
         /// </summary>
         [Browsable(false)]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        public byte Number { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public short? Number { get; set; }
 
         /// <summary>
         /// Gets or sets the item level.
@@ -528,16 +591,29 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
     /// </summary>
     public class StarterSkill
     {
+        private Skill? _skill;
+
         /// <summary>
         /// Gets the display name.
         /// </summary>
         [Browsable(false)]
-        public string Name => this.Skill?.Name ?? $"Skill {this.Number}";
+        public string Name => this.Skill?.Name ?? $"Skill {this.Number?.ToString() ?? "?"}";
 
         /// <summary>
         /// Gets or sets the skill.
         /// </summary>
-        public Skill? Skill { get; set; }
+        public Skill? Skill
+        {
+            get => this._skill;
+            set
+            {
+                this._skill = value;
+                if (value is not null)
+                {
+                    this.Number = value.Number;
+                }
+            }
+        }
 
         /// <summary>
         /// Gets or sets the legacy character class number.
@@ -550,8 +626,8 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
         /// Gets or sets the skill number.
         /// </summary>
         [Browsable(false)]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        public int Number { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? Number { get; set; }
 
         /// <summary>
         /// Creates a starter skill.
