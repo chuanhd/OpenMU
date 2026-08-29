@@ -222,8 +222,107 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
         var item = player.PersistenceContext.CreateNew<Item>();
         item.Definition = itemDefinition;
         item.Durability = itemConfiguration.Durability ?? item.Definition.Durability;
+        item.HasSkill = item.Definition.Skill is not null && itemConfiguration.Skill;
         item.Level = itemConfiguration.Level;
+        item.SocketCount = item.Definition.MaximumSockets;
+        this.AddOption(player, item, itemConfiguration);
+        this.AddLuckOption(player, item, itemConfiguration);
+        this.AddExcellentOptions(player, item, itemConfiguration);
+        this.AddAncientBonusOption(player, item, itemConfiguration);
         return item;
+    }
+
+    private void AddOption(Player player, Item item, StarterItem itemConfiguration)
+    {
+        if (item.Definition is null || itemConfiguration.Opt == 0)
+        {
+            return;
+        }
+
+        var normalOption = (item.Definition.PossibleItemOptions ?? Enumerable.Empty<ItemOptionDefinition>())
+            .SelectMany(o => o.PossibleOptions ?? Enumerable.Empty<IncreasableItemOption>())
+            .FirstOrDefault(o => o.OptionType == ItemOptionTypes.Option);
+        if (normalOption is null)
+        {
+            player.Logger.LogWarning("Starter item {ItemName} has no normal option definition.", item.Definition.Name);
+            return;
+        }
+
+        var optionLink = player.PersistenceContext.CreateNew<ItemOptionLink>();
+        optionLink.ItemOption = normalOption;
+        optionLink.Level = itemConfiguration.Opt;
+        item.ItemOptions.Add(optionLink);
+    }
+
+    private void AddLuckOption(Player player, Item item, StarterItem itemConfiguration)
+    {
+        if (item.Definition is null || !itemConfiguration.Luck)
+        {
+            return;
+        }
+
+        var luckOption = (item.Definition.PossibleItemOptions ?? Enumerable.Empty<ItemOptionDefinition>())
+            .SelectMany(o => o.PossibleOptions ?? Enumerable.Empty<IncreasableItemOption>())
+            .FirstOrDefault(o => o.OptionType == ItemOptionTypes.Luck);
+        if (luckOption is null)
+        {
+            player.Logger.LogWarning("Starter item {ItemName} has no luck option definition.", item.Definition.Name);
+            return;
+        }
+
+        var optionLink = player.PersistenceContext.CreateNew<ItemOptionLink>();
+        optionLink.ItemOption = luckOption;
+        item.ItemOptions.Add(optionLink);
+    }
+
+    private void AddExcellentOptions(Player player, Item item, StarterItem itemConfiguration)
+    {
+        if (item.Definition is null || itemConfiguration.ExcellentNumber == 0)
+        {
+            return;
+        }
+
+        var excellentOptions = (item.Definition.PossibleItemOptions ?? Enumerable.Empty<ItemOptionDefinition>())
+            .SelectMany(o => o.PossibleOptions ?? Enumerable.Empty<IncreasableItemOption>())
+            .Where(o => o.OptionType == ItemOptionTypes.Excellent)
+            .Where(o => ((1 << (o.Number - 1)) & itemConfiguration.ExcellentNumber) > 0)
+            .ToList();
+
+        if (excellentOptions.Count == 0)
+        {
+            player.Logger.LogWarning("Starter item {ItemName} has no matching excellent option definition for mask {ExcellentNumber}.", item.Definition.Name, itemConfiguration.ExcellentNumber);
+            return;
+        }
+
+        foreach (var excellentOption in excellentOptions)
+        {
+            var optionLink = player.PersistenceContext.CreateNew<ItemOptionLink>();
+            optionLink.ItemOption = excellentOption;
+            item.ItemOptions.Add(optionLink);
+        }
+
+        item.HasSkill = item.Definition.Skill is not null;
+    }
+
+    private void AddAncientBonusOption(Player player, Item item, StarterItem itemConfiguration)
+    {
+        if (item.Definition is null || itemConfiguration.Ancient == 0)
+        {
+            return;
+        }
+
+        if ((item.Definition.PossibleItemSetGroups ?? Enumerable.Empty<ItemSetGroup>()).FirstOrDefault(g => g.Items.Any(i => i.ItemDefinition == item.Definition && i.AncientSetDiscriminator == itemConfiguration.Ancient)) is not { } ancientSet
+            || ancientSet.Items.FirstOrDefault(i => i.ItemDefinition == item.Definition) is not { } itemOfItemSet)
+        {
+            player.Logger.LogWarning("Starter item {ItemName} has no ancient set definition for discriminator {AncientDiscriminator}.", item.Definition.Name, itemConfiguration.Ancient);
+            return;
+        }
+
+        var optionLink = player.PersistenceContext.CreateNew<ItemOptionLink>();
+        optionLink.ItemOption = itemOfItemSet.BonusOption;
+        optionLink.Level = itemConfiguration.AncientBonusLevel;
+        item.ItemOptions.Add(optionLink);
+        item.ItemSetGroups.Add(itemOfItemSet);
     }
 
     private SkillEntry? CreateSkillEntry(Player player, Character createdCharacter, StarterSkill skillConfiguration)
@@ -526,7 +625,7 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
         /// <summary>
         /// Gets or sets the item definition.
         /// </summary>
-        [Display(Name = "Item")]
+        [Display(Name = "Item", Order = 0)]
         public ItemDefinition? ItemDefinition
         {
             get => this._itemDefinition;
@@ -565,12 +664,50 @@ public class ClaimStarterPackageChatCommandPlugIn : ChatCommandPlugInBase<EmptyC
         /// <summary>
         /// Gets or sets the item level.
         /// </summary>
+        [Display(Order = 1)]
         public byte Level { get; set; }
 
         /// <summary>
         /// Gets or sets the item durability. If it's null, the item definition durability is used.
         /// </summary>
+        [Display(Order = 2)]
         public byte? Durability { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the item contains its skill.
+        /// </summary>
+        [Display(Name = "Skill", Order = 3)]
+        public bool Skill { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the item contains luck.
+        /// </summary>
+        [Display(Name = "Luck", Order = 4)]
+        public bool Luck { get; set; }
+
+        /// <summary>
+        /// Gets or sets the normal item option level.
+        /// </summary>
+        [Display(Name = "Option Level", Order = 5)]
+        public byte Opt { get; set; }
+
+        /// <summary>
+        /// Gets or sets the excellent option bit mask.
+        /// </summary>
+        [Display(Name = "Excellent Option Mask", Order = 6)]
+        public byte ExcellentNumber { get; set; }
+
+        /// <summary>
+        /// Gets or sets the ancient set discriminator.
+        /// </summary>
+        [Display(Name = "Ancient Set", Order = 7)]
+        public byte Ancient { get; set; }
+
+        /// <summary>
+        /// Gets or sets the ancient bonus option level.
+        /// </summary>
+        [Display(Name = "Ancient Bonus Level", Order = 8)]
+        public byte AncientBonusLevel { get; set; } = 1;
 
         /// <summary>
         /// Creates a starter item.
