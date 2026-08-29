@@ -4,6 +4,7 @@
 
 namespace MUnique.OpenMU.Tests;
 
+using System.Reflection;
 using Moq;
 using MUnique.OpenMU.DataModel.Configuration;
 using MUnique.OpenMU.DataModel.Configuration.Items;
@@ -100,6 +101,56 @@ public class ClaimStarterPackageChatCommandPlugInTest
         Assert.That(player.SelectedCharacter.Inventory.Items.Any(item => item.Definition == classItem && item.Level == 3 && item.Durability == 18), Is.True);
         Assert.That(player.SelectedCharacter.Inventory.Items.Any(item => item.Level == 7), Is.False);
         Assert.That(player.SelectedCharacter.LearnedSkills.Select(entry => entry.Skill), Does.Contain(skill));
+    }
+
+    /// <summary>
+    /// Verifies that configured item options are applied when a starter item is created.
+    /// </summary>
+    [Test]
+    public async ValueTask ClaimAddsConfiguredItemOptionsAsync()
+    {
+        var player = await PlayerTestHelper.CreatePlayerAsync().ConfigureAwait(false);
+        player.GameContext.Configuration.MaximumInventoryMoney = int.MaxValue;
+        player.SelectedCharacter!.CharacterClass!.Number = 4;
+        AddDefinitions(player.GameContext.Configuration, player.SelectedCharacter.CharacterClass);
+        var itemDefinition = player.GameContext.Configuration.Items.First(item => item.Group == 1 && item.Number == 0);
+        itemDefinition.Skill = player.GameContext.Configuration.Skills.First(skill => skill.Number == 17);
+        AddOptionDefinitions(itemDefinition);
+        var plugIn = new ClaimStarterPackageChatCommandPlugIn
+        {
+            Configuration = new ClaimStarterPackageChatCommandPlugIn.StarterPackageConfiguration
+            {
+                Packages =
+                [
+                    new()
+                    {
+                        CharacterClassNumber = 4,
+                        Items =
+                        [
+                            new()
+                            {
+                                ItemDefinition = itemDefinition,
+                                Level = 9,
+                                Skill = true,
+                                Luck = true,
+                                Opt = 4,
+                                ExcellentNumber = 3,
+                            },
+                        ],
+                    },
+                ],
+            },
+        };
+
+        await plugIn.HandleCommandAsync(player, "/starter").ConfigureAwait(false);
+
+        var item = player.SelectedCharacter.Inventory!.Items.Single();
+        Assert.That(item.Definition, Is.SameAs(itemDefinition));
+        Assert.That(item.Level, Is.EqualTo(9));
+        Assert.That(item.HasSkill, Is.True);
+        Assert.That(item.ItemOptions.Single(option => option.ItemOption?.OptionType == ItemOptionTypes.Option).Level, Is.EqualTo(4));
+        Assert.That(item.ItemOptions.Any(option => option.ItemOption?.OptionType == ItemOptionTypes.Luck), Is.True);
+        Assert.That(item.ItemOptions.Count(option => option.ItemOption?.OptionType == ItemOptionTypes.Excellent), Is.EqualTo(2));
     }
 
     /// <summary>
@@ -300,7 +351,7 @@ public class ClaimStarterPackageChatCommandPlugInTest
 
     private static ItemDefinition CreateItemDefinition(byte group, short number, string name, byte durability)
     {
-        return new ItemDefinition
+        var itemDefinition = new ItemDefinition
         {
             Group = group,
             Number = number,
@@ -310,5 +361,33 @@ public class ClaimStarterPackageChatCommandPlugInTest
             Durability = durability,
             MaximumItemLevel = 15,
         };
+        SetProtectedCollection(itemDefinition, nameof(ItemDefinition.PossibleItemOptions), new List<ItemOptionDefinition>());
+        SetProtectedCollection(itemDefinition, nameof(ItemDefinition.PossibleItemSetGroups), new List<ItemSetGroup>());
+        return itemDefinition;
+    }
+
+    private static void AddOptionDefinitions(ItemDefinition itemDefinition)
+    {
+        var normalOption = new IncreasableItemOption { OptionType = ItemOptionTypes.Option, Number = 1 };
+        var luckOption = new IncreasableItemOption { OptionType = ItemOptionTypes.Luck, Number = 1 };
+        var firstExcellentOption = new IncreasableItemOption { OptionType = ItemOptionTypes.Excellent, Number = 1 };
+        var secondExcellentOption = new IncreasableItemOption { OptionType = ItemOptionTypes.Excellent, Number = 2 };
+        itemDefinition.PossibleItemOptions.Add(CreateItemOptionDefinition(normalOption));
+        itemDefinition.PossibleItemOptions.Add(CreateItemOptionDefinition(luckOption));
+        itemDefinition.PossibleItemOptions.Add(CreateItemOptionDefinition(firstExcellentOption, secondExcellentOption));
+    }
+
+    private static ItemOptionDefinition CreateItemOptionDefinition(params IncreasableItemOption[] options)
+    {
+        var definition = new ItemOptionDefinition { Name = "Option" };
+        SetProtectedCollection(definition, nameof(ItemOptionDefinition.PossibleOptions), options);
+        return definition;
+    }
+
+    private static void SetProtectedCollection<TItem, TCollectionItem>(TItem owner, string propertyName, ICollection<TCollectionItem> value)
+    {
+        typeof(TItem)
+            .GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public)!
+            .SetValue(owner, value);
     }
 }
