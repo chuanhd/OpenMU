@@ -35,6 +35,9 @@ namespace MUnique.OpenMU.Persistence.EntityFramework.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<bool>("HasReceivedStarterPackage")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsBot")
                         .HasColumnType("boolean");
 

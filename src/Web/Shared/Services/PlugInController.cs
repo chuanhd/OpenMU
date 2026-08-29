@@ -198,6 +198,8 @@ public class PlugInController : IDataService<PlugInConfigurationViewItem>, ISupp
 
         var configuration = item.Configuration.GetConfiguration(item.ConfigurationType, referenceResolver)
                             ?? Activator.CreateInstance(item.ConfigurationType);
+        var gameConfiguration = await this._dataSource.GetOwnerAsync(Guid.Empty).ConfigureAwait(true);
+        ResolveConfigurationReferences(configuration!, gameConfiguration);
         var parameters = new ModalParameters();
         parameters.Add(nameof(ModalCreateNew<object>.Item), configuration!);
         parameters.Add(nameof(ModalCreateNew<object>.PersistenceContext), await this._dataSource.GetContextAsync().ConfigureAwait(true));
@@ -323,6 +325,13 @@ public class PlugInController : IDataService<PlugInConfigurationViewItem>, ISupp
                                                           && this.FilterByName(plugInType)
                                                           && this.FilterByTypeName(plugInType))
             .OrderBy(p => p.CustomConfiguration is null); // First the ones which can be configured
+    }
+
+    private static void ResolveConfigurationReferences(object configuration, GameConfiguration gameConfiguration)
+    {
+        configuration.GetType()
+            .GetMethod("ResolveReferences", BindingFlags.Instance | BindingFlags.Public, [typeof(GameConfiguration)])
+            ?.Invoke(configuration, [gameConfiguration]);
     }
 
     private async ValueTask ChangeActiveFlagAsync(PlugInConfigurationViewItem item, bool value)

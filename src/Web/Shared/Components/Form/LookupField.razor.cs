@@ -7,6 +7,7 @@ namespace MUnique.OpenMU.Web.Shared.Components.Form;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Components;
+using MUnique.OpenMU.DataModel.Configuration.Items;
 using MUnique.OpenMU.Persistence;
 using MUnique.OpenMU.Web.Shared.Services;
 
@@ -49,11 +50,14 @@ public partial class LookupField<TObject>
     [Parameter]
     public Func<TObject, string> CaptionFactory { get; set; } = obj => obj.GetName();
 
-    private ILookupController EffectiveLookupController => this.ExplicitLookupController ?? this.LookupController;
-
     /// <inheritdoc />
     protected override bool TryParseValueFromString(string? value, [MaybeNullWhen(false)] out TObject result, [NotNullWhen(false)] out string? validationErrorMessage)
     {
         throw new NotImplementedException();
+    }
+
+    private static string GetItemPreviewImagePath(ItemDefinition itemDefinition)
+    {
+        return $"_content/MUnique.OpenMU.Web.ItemEditor/img/items/item_{itemDefinition.Group}_{itemDefinition.Number}_0.png";
     }
 }

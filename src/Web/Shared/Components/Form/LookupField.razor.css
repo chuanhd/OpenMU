@@ -1,0 +1,6 @@
+.lookup-item-preview {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    flex: 0 0 32px;
+}

@@ -138,6 +138,11 @@ public class Account
     public bool IsBot { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether this account already received its starter package.
+    /// </summary>
+    public bool HasReceivedStarterPackage { get; set; }
+
+    /// <summary>
     /// Gets or sets the characters.
     /// </summary>
     [MemberOfAggregate]
