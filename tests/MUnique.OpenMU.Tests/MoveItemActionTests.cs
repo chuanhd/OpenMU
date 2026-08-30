@@ -83,6 +83,29 @@ public class MoveItemActionTests
     }
 
     /// <summary>
+    /// Verifies that a partial stack fills the target up to the 255 potion stack limit.
+    /// </summary>
+    [Test]
+    public async ValueTask PartialPotionStackFillsTargetUpTo255Async()
+    {
+        var player = await CreateTestPlayerAsync().ConfigureAwait(false);
+        var definition = CreateDefinition(1, 1, 255);
+        var source = CreateItem(definition, 10);
+        var target = CreateItem(definition, 250);
+
+        await player.Inventory!.AddItemAsync(20, source).ConfigureAwait(false);
+        await player.Inventory.AddItemAsync(21, target).ConfigureAwait(false);
+
+        var action = new MoveItemAction();
+        await action.MoveItemAsync(player, 20, Storages.Inventory, 21, Storages.Inventory).ConfigureAwait(false);
+
+        Assert.That(player.Inventory.GetItem(20), Is.SameAs(source));
+        Assert.That(player.Inventory.GetItem(21), Is.SameAs(target));
+        Assert.That(source.Durability, Is.EqualTo(5));
+        Assert.That(target.Durability, Is.EqualTo(255));
+    }
+
+    /// <summary>
     /// Verifies that a failed move to an occupied slot keeps the source at its original slot.
     /// </summary>
     [Test]

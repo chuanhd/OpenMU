@@ -7,6 +7,7 @@ namespace MUnique.OpenMU.Persistence.Initialization.Tests;
 using Microsoft.Extensions.Logging.Abstractions;
 using MUnique.OpenMU.DataModel;
 using MUnique.OpenMU.DataModel.Configuration;
+using MUnique.OpenMU.DataModel.Configuration.Items;
 using MUnique.OpenMU.DataModel.Entities;
 using MUnique.OpenMU.GameLogic;
 using MUnique.OpenMU.Persistence.EntityFramework;
@@ -22,6 +23,23 @@ internal class TestInitializationWithEfCore
     private const byte IcarusMapNumber = 10;
     private static readonly Guid FeatherDropGroupId = new(0x200, IcarusMapNumber, 1, 0, 0, 0, 0, 0, 0, 0, 0);
     private static readonly Guid CrestDropGroupId = new(0x200, IcarusMapNumber, 2, 0, 0, 0, 0, 0, 0, 0, 0);
+    private static readonly short[] PotionNumbers =
+    [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        8,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+    ];
 
     /// <summary>
     /// Tests the data initialization using the entity framework core.
@@ -53,6 +71,7 @@ internal class TestInitializationWithEfCore
         var contextProvider = new InMemoryPersistenceContextProvider();
         var dataInitialization = new VersionSeasonSix.DataInitialization(contextProvider, new NullLoggerFactory());
         await dataInitialization.CreateInitialDataAsync(1, true).ConfigureAwait(false);
+        await this.AssertPotionStackSizesAsync(contextProvider).ConfigureAwait(false);
         await this.AssertIcarusFeatherAndCrestDropGroupsAsync(contextProvider).ConfigureAwait(false);
         await this.AssertCastleSiegeUpdatePlugInAsync(contextProvider).ConfigureAwait(false);
         await this.TestIfItemsFitIntoInventoriesAsync(contextProvider).ConfigureAwait(false);
@@ -91,6 +110,30 @@ internal class TestInitializationWithEfCore
         Assert.That(groups[0].PossibleItems, Has.Count.EqualTo(1));
         Assert.That(groups[0].PossibleItems.Single().Group, Is.EqualTo((byte)13));
         Assert.That(groups[0].PossibleItems.Single().Number, Is.EqualTo((short)14));
+    }
+
+    /// <summary>
+    /// Tests that applying the potion stack update changes existing Season 6 item definitions.
+    /// </summary>
+    [Test]
+    public async Task TestSeason6PotionStackSizeUpdatePlugInAsync()
+    {
+        var contextProvider = new InMemoryPersistenceContextProvider();
+        var dataInitialization = new VersionSeasonSix.DataInitialization(contextProvider, new NullLoggerFactory());
+        await dataInitialization.CreateInitialDataAsync(1, true).ConfigureAwait(false);
+
+        using var context = contextProvider.CreateNewContext();
+        var gameConfiguration = (await context.GetAsync<GameConfiguration>().ConfigureAwait(false)).Single();
+        foreach (var potion in GetPotionDefinitions(gameConfiguration))
+        {
+            potion.Durability = 3;
+        }
+
+        var update = new IncreasePotionStackSizeUpdatePlugIn();
+        await update.ApplyUpdateAsync(context, gameConfiguration).ConfigureAwait(false);
+
+        var stackSizes = GetPotionDefinitions(gameConfiguration).Select(item => item.Durability);
+        Assert.That(stackSizes, Is.All.EqualTo(VersionSeasonSix.Items.Potions.MaximumPotionStackSize));
     }
 
     /// <summary>
@@ -414,5 +457,21 @@ internal class TestInitializationWithEfCore
     private void AssertZone(CastleSiegeZoneDefinition actual, (byte X1, byte Y1, byte X2, byte Y2) expected)
     {
         Assert.That((actual.X1, actual.Y1, actual.X2, actual.Y2), Is.EqualTo(expected));
+    }
+
+    private async Task AssertPotionStackSizesAsync(InMemoryPersistenceContextProvider contextProvider)
+    {
+        using var context = contextProvider.CreateNewContext();
+        var gameConfiguration = (await context.GetAsync<GameConfiguration>().ConfigureAwait(false)).Single();
+        Assert.That(GetPotionDefinitions(gameConfiguration), Has.Count.EqualTo(PotionNumbers.Length));
+        var stackSizes = GetPotionDefinitions(gameConfiguration).Select(item => item.Durability);
+        Assert.That(stackSizes, Is.All.EqualTo(VersionSeasonSix.Items.Potions.MaximumPotionStackSize));
+    }
+
+    private static System.Collections.Generic.List<ItemDefinition> GetPotionDefinitions(GameConfiguration gameConfiguration)
+    {
+        return gameConfiguration.Items
+            .Where(item => item.Group == 14 && PotionNumbers.Contains(item.Number))
+            .ToList();
     }
 }
