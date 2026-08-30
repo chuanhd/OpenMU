@@ -529,4 +529,9 @@ public enum UpdateVersion
     /// The version of the <see cref="ConfigureCastleSiegeParticipationUpdatePlugIn"/>.
     /// </summary>
     ConfigureCastleSiegeParticipation = 104,
+
+    /// <summary>
+    /// The version of the <see cref="IncreasePotionStackSizeUpdatePlugIn"/>.
+    /// </summary>
+    IncreasePotionStackSize = 105,
 }
