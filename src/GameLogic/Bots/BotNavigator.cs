@@ -281,7 +281,7 @@ internal sealed class BotNavigator : AsyncDisposable
     /// </summary>
     private DateTime _nextShoppingCheckUtc = DateTime.UtcNow + (ShoppingCooldown * Rand.NextDouble());
     private DateTime? _resetDueAtUtc;
-    private short _leaderMapNumber;
+    private Guid _leaderMapId;
     private DateTime _leaderOnMapSinceUtc = DateTime.MinValue;
 
     /// <summary>
@@ -454,6 +454,26 @@ internal sealed class BotNavigator : AsyncDisposable
         var centerX = (area.X1 + area.X2) / 2;
         var centerY = (area.Y1 + area.Y2) / 2;
         return Math.Abs(from.X - centerX) + Math.Abs(from.Y - centerY);
+    }
+
+    private static bool IsSameMapDefinition(GameMapDefinition left, GameMapDefinition right)
+    {
+        var leftId = left.GetId();
+        var rightId = right.GetId();
+        if (leftId != Guid.Empty && rightId != Guid.Empty)
+        {
+            return leftId == rightId;
+        }
+
+        return ReferenceEquals(left, right)
+               || (left.Number == right.Number && left.Discriminator == right.Discriminator);
+    }
+
+    private static int GateDistance(Gate gate, Point target)
+    {
+        var centerX = (gate.X1 + gate.X2) / 2;
+        var centerY = (gate.Y1 + gate.Y2) / 2;
+        return Math.Abs(target.X - centerX) + Math.Abs(target.Y - centerY);
     }
 
     /// <summary>
@@ -1167,7 +1187,31 @@ internal sealed class BotNavigator : AsyncDisposable
         {
             this._destination = leader.Position;
             this._hasDestination = true;
-            await this.TravelTowardAsync(map, leader.Position, cancellationToken).ConfigureAwait(false);
+            if (await this.TravelTowardAsync(map, leader.Position, cancellationToken).ConfigureAwait(false))
+            {
+                return true;
+            }
+
+            // Some maps represent several floors as disconnected regions on the same map id
+            // (Dungeon, Lost Tower, ...). If walking cannot reach the leader, regroup through the
+            // legal warp entry nearest to him instead of re-issuing an impossible path every tick.
+            if (DateTime.UtcNow - this._lastWarpUtc >= FollowWarpCooldown
+                && this.TryGetNearestLegalWarp(map.Definition, leader.Position, out var leaderWarp)
+                && leaderWarp.Gate is { } leaderGate)
+            {
+                this._lastWarpUtc = DateTime.UtcNow;
+                this._hasDestination = false;
+                this._travelPath = null;
+                this._player.Logger.LogDebug(
+                    "Bot {Character} following party leader {Leader} within map {Map} through warp {Warp}.",
+                    this._player.Name,
+                    leader.Name,
+                    map.Definition.Name,
+                    leaderWarp.Name);
+                await this._player.WarpToAsync(leaderGate).ConfigureAwait(false);
+                await this.TryPersistCurrentMapAsync(map.Definition).ConfigureAwait(false);
+            }
+
             return true;
         }
 
@@ -1176,18 +1220,18 @@ internal sealed class BotNavigator : AsyncDisposable
 
     /// <summary>
     /// Whether the leader has been on his current map long enough (<see cref="LeaderSettleTime"/>) for the
-    /// bot to follow him there. Tracks the leader's map per bot, so each follower makes the call on its own.
+    /// bot to follow him there. Tracks the leader's map instance per bot, so each follower makes the call on its own.
     /// </summary>
     private bool HasLeaderSettled(Player leader)
     {
-        if (leader.CurrentMap?.Definition is not { } leaderMap)
+        if (leader.CurrentMap is not { } leaderMap)
         {
             return false;
         }
 
-        if (this._leaderMapNumber != leaderMap.Number)
+        if (this._leaderMapId != leaderMap.Id)
         {
-            this._leaderMapNumber = leaderMap.Number;
+            this._leaderMapId = leaderMap.Id;
             this._leaderOnMapSinceUtc = DateTime.UtcNow;
         }
 
@@ -1678,18 +1722,39 @@ internal sealed class BotNavigator : AsyncDisposable
     /// <returns>True, if the bot may warp to the map.</returns>
     private bool TryGetLegalWarp(GameMapDefinition mapDefinition, [MaybeNullWhen(false)] out WarpInfo warp)
     {
-        warp = null;
+        warp = this.GetLegalWarps(mapDefinition)
+            .FirstOrDefault();
+        return warp is not null;
+    }
+
+    /// <summary>
+    /// Gets the legal warp entry nearest to a target position on the given map.
+    /// </summary>
+    /// <param name="mapDefinition">The target map.</param>
+    /// <param name="target">The target position.</param>
+    /// <param name="warp">The nearest legal warp info, if any.</param>
+    /// <returns>True, if a legal entry exists.</returns>
+    private bool TryGetNearestLegalWarp(GameMapDefinition mapDefinition, Point target, [MaybeNullWhen(false)] out WarpInfo warp)
+    {
+        warp = this.GetLegalWarps(mapDefinition)
+            .OrderBy(w => GateDistance(w.Gate!, target))
+            .FirstOrDefault();
+        return warp is not null;
+    }
+
+    private IEnumerable<WarpInfo> GetLegalWarps(GameMapDefinition mapDefinition)
+    {
         if (this._player.SelectedCharacter is not { } character)
         {
-            return false;
+            return [];
         }
 
         var plainLevel = (int)(this._player.Attributes?[Stats.Level] ?? 1);
-        warp = this._player.GameContext.Configuration.WarpList
-            .Where(w => w.Gate?.Map?.Number == mapDefinition.Number
+        return this._player.GameContext.Configuration.WarpList
+            .Where(w => w.Gate?.Map is { } gateMap
+                        && IsSameMapDefinition(gateMap, mapDefinition)
                         && character.GetEffectiveMoveLevelRequirement(w.LevelRequirement) <= plainLevel)
-            .FirstOrDefault();
-        return warp is not null;
+            .ToList();
     }
 
     /// <summary>
