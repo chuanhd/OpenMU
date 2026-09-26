@@ -20,22 +20,24 @@ using MUnique.OpenMU.ConnectServer;
 using MUnique.OpenMU.DataModel.Configuration;
 using MUnique.OpenMU.FriendServer;
 using MUnique.OpenMU.GameLogic;
+using MUnique.OpenMU.GameLogic.TestActors;
+using MUnique.OpenMU.GameServer;
 using MUnique.OpenMU.GuildServer;
 using MUnique.OpenMU.Interfaces;
 using MUnique.OpenMU.LoginServer;
 using MUnique.OpenMU.Network;
 using MUnique.OpenMU.Network.Analyzer;
 using MUnique.OpenMU.Persistence;
+using MUnique.OpenMU.Persistence.AdminAuth;
 using MUnique.OpenMU.Persistence.EntityFramework;
 using MUnique.OpenMU.Persistence.EntityFramework.AdminAuth;
 using MUnique.OpenMU.Persistence.EntityFramework.Json;
-using MUnique.OpenMU.Persistence.Initialization;
 using MUnique.OpenMU.Persistence.Initialization.Version075;
 using MUnique.OpenMU.Persistence.InMemory;
 using MUnique.OpenMU.PlugIns;
+using MUnique.OpenMU.Startup.TestActors;
 using MUnique.OpenMU.Web.AdminPanel;
-using MUnique.OpenMU.Web.AdminPanel.Services;
-using MUnique.OpenMU.Web.API;
+using MUnique.OpenMU.Web.AdminPanel.API;
 using MUnique.OpenMU.Web.Map.Map;
 using MUnique.OpenMU.Web.Shared;
 using Nito.AsyncEx.Synchronous;
@@ -258,6 +260,22 @@ internal sealed class Program : IDisposable
             // The storage of the admin panel users has to be registered before the panel itself,
             // which only adds a fallback when nothing else is registered.
             builder.Services.AddAdminUserRepository();
+            builder.Services.AddSingleton<IBackupService>(s =>
+            {
+                var contextProvider = s.GetRequiredService<IMigratableDatabaseContextProvider>();
+                if (contextProvider is IPersistenceContextProvider persistenceContextProvider)
+                {
+                    return new BackupService(persistenceContextProvider, s.GetRequiredService<IAdminUserRepository>());
+                }
+
+                return new InMemoryBackupService(s.GetRequiredService<IPersistenceContextProvider>(), s.GetRequiredService<IAdminUserRepository>());
+            });
+            if (!args.Contains("-demo"))
+            {
+                // A snapshot of the database is only possible when there is a real database.
+                builder.Services.AddSingleton<IDatabaseSnapshotService, DatabaseSnapshotService>();
+            }
+
             builder.AddAdminPanel(includeMapApp: true);
         }
 
@@ -296,7 +314,7 @@ internal sealed class Program : IDisposable
             .AddSingleton<IFriendNotifier, FriendNotifierToGameServer>()
             .AddSingleton<PlugInManager>()
             .AddSingleton<IServerProvider, LocalServerProvider>()
-            .AddSingleton<IPacketCaptureService, PacketCaptureService>()
+            .AddSingleton<IPacketCaptureService>(CreatePacketCaptureService)
             .AddSingleton<ICollection<PlugInConfiguration>>(this.PlugInConfigurationsFactory)
             .AddTransient<ReferenceHandler, ByDataSourceReferenceHandler>(provider =>
             {
@@ -304,8 +322,20 @@ internal sealed class Program : IDisposable
                 var dataSource = new GameConfigurationDataSource(
                     provider.GetService<ILogger<GameConfigurationDataSource>>()!,
                     persistenceContextProvider!);
-                var configId = persistenceContextProvider!.CreateNewConfigurationContext().GetDefaultGameConfigurationIdAsync(default).AsTask().WaitAndUnwrapException();
-                dataSource.GetOwnerAsync(configId!.Value).AsTask().WaitAndUnwrapException();
+                using var configurationContext = persistenceContextProvider!.CreateNewConfigurationContext();
+                var configId = configurationContext.GetDefaultGameConfigurationIdAsync(default).AsTask().WaitAndUnwrapException();
+                if (configId is { } gameConfigurationId)
+                {
+                    dataSource.GetOwnerAsync(gameConfigurationId).AsTask().WaitAndUnwrapException();
+                }
+                else
+                {
+                    // The database doesn't contain a game configuration yet. It's created later,
+                    // e.g. through the admin panel. The data source is then loaded again,
+                    // see OnDatabaseInitializedAsync.
+                    this._logger.Debug("No game configuration found in the database, so the data source is not loaded yet.");
+                }
+
                 var referenceHandler = new ByDataSourceReferenceHandler(dataSource);
                 return referenceHandler;
             })
@@ -314,7 +344,10 @@ internal sealed class Program : IDisposable
             .AddHostedService<GameServerContainer>()
             .AddHostedService(provider => provider.GetService<GameServerContainer>()!)
             .AddHostedService(provider => provider.GetService<ConnectServerContainer>()!)
+            .AddNetworkObservation()
             .AddControllers().AddApplicationPart(typeof(ServerController).Assembly);
+
+        this.AddActorControlEndpoint(builder.Services);
 
         var host = builder.Build();
 
@@ -326,6 +359,13 @@ internal sealed class Program : IDisposable
             host.ConfigureAdminPanel();
         }
 
+        // When the server is started with an uninitialized database, the plugin configurations
+        // are not available yet. They're created during the data initialization, so we have to
+        // load them afterwards. The subscribers are invoked one after another in the order of
+        // their registration, so we subscribe before the host is started (and with it, the
+        // server containers) to get the plugins ready before the servers are restarted.
+        host.Services.GetRequiredService<SetupService>().DatabaseInitialized += () => this.OnDatabaseInitializedAsync(host.Services);
+
         this._logger.Information("Starting host...");
         var stopwatch = new Stopwatch();
         stopwatch.Start();
@@ -335,6 +375,38 @@ internal sealed class Program : IDisposable
         this._logger.Information("Host started, elapsed time: {elapsed}", stopwatch.Elapsed);
         this._logger.Information("Admin Panel bound to urls: {urls}", string.Join("; ", host.Urls));
         return host;
+    }
+
+    /// <summary>
+    /// Adds the test actor control endpoint, but only when <c>OPENMU_ACTOR_PORT</c> names a
+    /// port; it binds loopback unless <c>OPENMU_ACTOR_ADDRESS</c> says otherwise. It is
+    /// unauthenticated development tooling and stays off by default, and it is registered after
+    /// the server containers on purpose -
+    /// hosted services are stopped in reverse order, so the actors are logged out (and their
+    /// progress saved) before the game servers go down.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    private void AddActorControlEndpoint(IServiceCollection services)
+    {
+        if (ActorControlService.ConfiguredOptions is not { } actorOptions)
+        {
+            if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(ActorControlService.PortVariableName)))
+            {
+                this._logger.Warning("{portVariable} is set, but it or {addressVariable} is not valid; the actor control endpoint stays off.", ActorControlService.PortVariableName, ActorControlService.AddressVariableName);
+            }
+
+            return;
+        }
+
+        this._logger.Information("Actor control endpoint enabled on {endPoint}", actorOptions.EndPoint);
+        services
+            .AddSingleton(actorOptions)
+            .AddSingleton<IGameServerContextLocator>(_ => new GameServerContextLocator(this._gameServers))
+            .AddSingleton<IActorFactory, ActorFactory>()
+            .AddSingleton<IActorRegistry, ActorRegistry>()
+            .AddSingleton<BotsController>()
+            .AddSingleton<ActorProtocolHandler>()
+            .AddHostedService<ActorControlService>();
     }
 
     private IIpAddressResolver CreateIpResolver(IServiceProvider serviceProvider, string[] args)
@@ -383,13 +455,70 @@ internal sealed class Program : IDisposable
         return configs;
     }
 
+    private async ValueTask OnDatabaseInitializedAsync(IServiceProvider services)
+    {
+        try
+        {
+            if (services.GetService<PlugInManager>() is not { } plugInManager
+                || services.GetService<IPersistenceContextProvider>() is not { } persistenceContextProvider)
+            {
+                return;
+            }
+
+            var configurations = await this.LoadPlugInConfigurationsAsync(plugInManager, persistenceContextProvider).ConfigureAwait(false);
+            plugInManager.ReadConfigurations(configurations);
+
+            if (services.GetService<ICollection<PlugInConfiguration>>() is { } registeredConfigurations)
+            {
+                // The registered collection was created before the data initialization
+                // and would keep the outdated (or empty) configurations otherwise.
+                registeredConfigurations.Clear();
+                configurations.ForEach(registeredConfigurations.Add);
+            }
+
+            this._logger.Information("Applied {count} plugin configurations after the database initialization.", configurations.Count);
+        }
+        catch (Exception ex)
+        {
+            this._logger.Error(ex, "Error when applying the plugin configurations after the database initialization.");
+        }
+    }
+
+    private async ValueTask<List<PlugInConfiguration>> LoadPlugInConfigurationsAsync(PlugInManager plugInManager, IPersistenceContextProvider persistenceContextProvider)
+    {
+        if (plugInManager.CustomConfigReferenceHandler is ByDataSourceReferenceHandler referenceHandler)
+        {
+            // The data source of the reference handler was loaded (or not) before the data
+            // initialization. Without reloading it, the references within the custom plugin
+            // configurations would be resolved on the previous - now deleted - game configuration.
+            var dataSource = referenceHandler.DataSource;
+            await dataSource.ForceDiscardChangesAsync().ConfigureAwait(false);
+            var gameConfiguration = await dataSource.GetOwnerAsync().ConfigureAwait(false);
+
+            // The configurations of the data source are used, so that they stay alive
+            // as long as the reference handler does.
+            return gameConfiguration.PlugInConfigurations.ToList();
+        }
+
+        using var context = persistenceContextProvider.CreateNewTypedContext(typeof(PlugInConfiguration), false);
+        return (await context.GetAsync<PlugInConfiguration>().ConfigureAwait(false)).ToList();
+    }
+
     private IEnumerable<PlugInConfiguration> CreateMissingPlugInConfigurations(IEnumerable<Type> plugInTypes, IPersistenceContextProvider persistenceContextProvider, ReferenceHandler referenceHandler)
     {
-        GameConfiguration gameConfiguration;
+        GameConfiguration? gameConfiguration;
 
         using (var context = persistenceContextProvider.CreateNewContext())
         {
-            gameConfiguration = context.GetAsync<GameConfiguration>().AsTask().WaitAndUnwrapException().First();
+            gameConfiguration = context.GetAsync<GameConfiguration>().AsTask().WaitAndUnwrapException().FirstOrDefault();
+        }
+
+        if (gameConfiguration is null)
+        {
+            // The database is not initialized yet - the plugin configurations are created
+            // together with the game configuration.
+            this._logger.Warning("No game configuration found in the database, so the missing plugin configurations can't be created yet.");
+            yield break;
         }
 
         using var saveContext = persistenceContextProvider.CreateNewContext(gameConfiguration);
@@ -536,6 +665,16 @@ internal sealed class Program : IDisposable
         }
 
         return contextProvider;
+    }
+
+    private static IPacketCaptureService CreatePacketCaptureService(IServiceProvider serviceProvider)
+    {
+        var serverProvider = serviceProvider.GetService<IServerProvider>()
+                             ?? throw new InvalidOperationException($"{nameof(IServerProvider)} not registered.");
+        var bufferSize = _systemConfiguration?.NetworkAnalyzerLiveBufferSize ?? 0;
+        return new PacketCaptureService(
+            serverProvider,
+            bufferSize > 0 ? bufferSize : LiveCapturedConnection.DefaultMaximumPacketCount);
     }
 
     private async Task ReadSystemConfigurationAsync(IPersistenceContextProvider persistenceContextProvider)

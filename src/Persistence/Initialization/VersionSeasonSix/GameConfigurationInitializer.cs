@@ -90,6 +90,8 @@ public class GameConfigurationInitializer : GameConfigurationInitializerBase
         new BloodCastleInitializer(this.Context, this.GameConfiguration).Initialize();
         new ChaosCastleInitializer(this.Context, this.GameConfiguration).Initialize();
         new CastleSiegeInitializer(this.Context, this.GameConfiguration).Initialize();
+        new KanturuInitializer(this.Context, this.GameConfiguration).Initialize();
+        new DoppelgangerInitializer(this.Context, this.GameConfiguration).Initialize();
     }
 
     /// <summary>

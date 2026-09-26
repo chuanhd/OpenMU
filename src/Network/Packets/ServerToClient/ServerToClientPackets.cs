@@ -26806,6 +26806,795 @@ public readonly struct ChainTarget
 
 
 /// <summary>
+/// Is sent by the server when: The player requested to enter the doppelganger event through the NPC Lugard.
+/// Causes reaction on client side: On failure, the client locks the enter button of the doppelganger entry dialog and may show a message.
+/// </summary>
+public readonly struct DoppelgangerEnterResult
+{
+    /// <summary>
+    /// Result of the doppelganger enter request.
+    /// </summary>
+    public enum EnterResult
+    {
+        /// <summary>
+        /// The player entered the event.
+        /// </summary>
+            Success = 0,
+
+        /// <summary>
+        /// The player could not enter, e.g. because of a missing ticket item. The client locks the enter button without showing a message.
+        /// </summary>
+            Failed = 1,
+
+        /// <summary>
+        /// The event is already running or occupied by another party. The client shows "Battle has already commenced. You cannot enter.".
+        /// </summary>
+            AlreadyStarted = 2,
+
+        /// <summary>
+        /// Player killers are not allowed to enter. The client shows "You cannot enter if you are a 1st Stage Outlaw.".
+        /// </summary>
+            PlayerKiller = 3,
+
+        /// <summary>
+        /// The client unlocks the enter button of the doppelganger entry dialog.
+        /// </summary>
+            EntranceAvailable = 4,
+    }
+
+    private readonly Memory<byte> _data;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DoppelgangerEnterResult"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    public DoppelgangerEnterResult(Memory<byte> data)
+        : this(data, true)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DoppelgangerEnterResult"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    /// <param name="initialize">If set to <c>true</c>, the header data is automatically initialized and written to the underlying span.</param>
+    private DoppelgangerEnterResult(Memory<byte> data, bool initialize)
+    {
+        this._data = data;
+        if (initialize)
+        {
+            var header = this.Header;
+            header.Type = HeaderType;
+            header.Code = Code;
+            header.Length = (byte)Math.Min(data.Length, Length);
+            header.SubCode = SubCode;
+        }
+    }
+
+    /// <summary>
+    /// Gets the header type of this data packet.
+    /// </summary>
+    public static byte HeaderType => 0xC1;
+
+    /// <summary>
+    /// Gets the operation code of this data packet.
+    /// </summary>
+    public static byte Code => 0xBF;
+
+    /// <summary>
+    /// Gets the operation sub-code of this data packet.
+    /// The <see cref="Code" /> is used as a grouping key.
+    /// </summary>
+    public static byte SubCode => 0x0E;
+
+    /// <summary>
+    /// Gets the initial length of this data packet. When the size is dynamic, this value may be bigger than actually needed.
+    /// </summary>
+    public static int Length => 5;
+
+    /// <summary>
+    /// Gets the header of this packet.
+    /// </summary>
+    public C1HeaderWithSubCode Header => new (this._data);
+
+    /// <summary>
+    /// Gets or sets the result.
+    /// </summary>
+    public DoppelgangerEnterResult.EnterResult Result
+    {
+        get => (EnterResult)this._data.Span[4];
+        set => this._data.Span[4] = (byte)value;
+    }
+
+    /// <summary>
+    /// Performs an implicit conversion from a Memory of bytes to a <see cref="DoppelgangerEnterResult"/>.
+    /// </summary>
+    /// <param name="packet">The packet as span.</param>
+    /// <returns>The packet as struct.</returns>
+    public static implicit operator DoppelgangerEnterResult(Memory<byte> packet) => new (packet, false);
+
+    /// <summary>
+    /// Performs an implicit conversion from <see cref="DoppelgangerEnterResult"/> to a Memory of bytes.
+    /// </summary>
+    /// <param name="packet">The packet as struct.</param>
+    /// <returns>The packet as byte span.</returns>
+    public static implicit operator Memory<byte>(DoppelgangerEnterResult packet) => packet._data; 
+}
+
+
+/// <summary>
+/// Is sent by the server when: The position of the most advanced monster on the path to the magic circle changed during the doppelganger event.
+/// Causes reaction on client side: The client updates the monster progress bar of the doppelganger frame.
+/// </summary>
+public readonly struct DoppelgangerMonsterPosition
+{
+    private readonly Memory<byte> _data;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DoppelgangerMonsterPosition"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    public DoppelgangerMonsterPosition(Memory<byte> data)
+        : this(data, true)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DoppelgangerMonsterPosition"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    /// <param name="initialize">If set to <c>true</c>, the header data is automatically initialized and written to the underlying span.</param>
+    private DoppelgangerMonsterPosition(Memory<byte> data, bool initialize)
+    {
+        this._data = data;
+        if (initialize)
+        {
+            var header = this.Header;
+            header.Type = HeaderType;
+            header.Code = Code;
+            header.Length = (byte)Math.Min(data.Length, Length);
+            header.SubCode = SubCode;
+        }
+    }
+
+    /// <summary>
+    /// Gets the header type of this data packet.
+    /// </summary>
+    public static byte HeaderType => 0xC1;
+
+    /// <summary>
+    /// Gets the operation code of this data packet.
+    /// </summary>
+    public static byte Code => 0xBF;
+
+    /// <summary>
+    /// Gets the operation sub-code of this data packet.
+    /// The <see cref="Code" /> is used as a grouping key.
+    /// </summary>
+    public static byte SubCode => 0x0F;
+
+    /// <summary>
+    /// Gets the initial length of this data packet. When the size is dynamic, this value may be bigger than actually needed.
+    /// </summary>
+    public static int Length => 5;
+
+    /// <summary>
+    /// Gets the header of this packet.
+    /// </summary>
+    public C1HeaderWithSubCode Header => new (this._data);
+
+    /// <summary>
+    /// Gets or sets the position index on the path, between 0 (start) and 22 (magic circle).
+    /// </summary>
+    public byte Position
+    {
+        get => this._data.Span[4];
+        set => this._data.Span[4] = value;
+    }
+
+    /// <summary>
+    /// Performs an implicit conversion from a Memory of bytes to a <see cref="DoppelgangerMonsterPosition"/>.
+    /// </summary>
+    /// <param name="packet">The packet as span.</param>
+    /// <returns>The packet as struct.</returns>
+    public static implicit operator DoppelgangerMonsterPosition(Memory<byte> packet) => new (packet, false);
+
+    /// <summary>
+    /// Performs an implicit conversion from <see cref="DoppelgangerMonsterPosition"/> to a Memory of bytes.
+    /// </summary>
+    /// <param name="packet">The packet as struct.</param>
+    /// <returns>The packet as byte span.</returns>
+    public static implicit operator Memory<byte>(DoppelgangerMonsterPosition packet) => packet._data; 
+}
+
+
+/// <summary>
+/// Is sent by the server when: The state of the doppelganger event changed.
+/// Causes reaction on client side: When the event starts (state Playing), the client shows the doppelganger frame and a message box with the failure conditions.
+/// </summary>
+public readonly struct DoppelgangerStateUpdate
+{
+    /// <summary>
+    /// The state of the doppelganger event.
+    /// </summary>
+    public enum DoppelgangerState
+    {
+        /// <summary>
+        /// The event is waiting for the party members to enter.
+        /// </summary>
+            Waiting = 0,
+
+        /// <summary>
+        /// The entrance is closed and the event is about to start.
+        /// </summary>
+            Ready = 1,
+
+        /// <summary>
+        /// The event is running.
+        /// </summary>
+            Playing = 2,
+
+        /// <summary>
+        /// The event has ended.
+        /// </summary>
+            Ended = 3,
+    }
+
+    private readonly Memory<byte> _data;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DoppelgangerStateUpdate"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    public DoppelgangerStateUpdate(Memory<byte> data)
+        : this(data, true)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DoppelgangerStateUpdate"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    /// <param name="initialize">If set to <c>true</c>, the header data is automatically initialized and written to the underlying span.</param>
+    private DoppelgangerStateUpdate(Memory<byte> data, bool initialize)
+    {
+        this._data = data;
+        if (initialize)
+        {
+            var header = this.Header;
+            header.Type = HeaderType;
+            header.Code = Code;
+            header.Length = (byte)Math.Min(data.Length, Length);
+            header.SubCode = SubCode;
+        }
+    }
+
+    /// <summary>
+    /// Gets the header type of this data packet.
+    /// </summary>
+    public static byte HeaderType => 0xC1;
+
+    /// <summary>
+    /// Gets the operation code of this data packet.
+    /// </summary>
+    public static byte Code => 0xBF;
+
+    /// <summary>
+    /// Gets the operation sub-code of this data packet.
+    /// The <see cref="Code" /> is used as a grouping key.
+    /// </summary>
+    public static byte SubCode => 0x10;
+
+    /// <summary>
+    /// Gets the initial length of this data packet. When the size is dynamic, this value may be bigger than actually needed.
+    /// </summary>
+    public static int Length => 5;
+
+    /// <summary>
+    /// Gets the header of this packet.
+    /// </summary>
+    public C1HeaderWithSubCode Header => new (this._data);
+
+    /// <summary>
+    /// Gets or sets the state.
+    /// </summary>
+    public DoppelgangerStateUpdate.DoppelgangerState State
+    {
+        get => (DoppelgangerState)this._data.Span[4];
+        set => this._data.Span[4] = (byte)value;
+    }
+
+    /// <summary>
+    /// Performs an implicit conversion from a Memory of bytes to a <see cref="DoppelgangerStateUpdate"/>.
+    /// </summary>
+    /// <param name="packet">The packet as span.</param>
+    /// <returns>The packet as struct.</returns>
+    public static implicit operator DoppelgangerStateUpdate(Memory<byte> packet) => new (packet, false);
+
+    /// <summary>
+    /// Performs an implicit conversion from <see cref="DoppelgangerStateUpdate"/> to a Memory of bytes.
+    /// </summary>
+    /// <param name="packet">The packet as struct.</param>
+    /// <returns>The packet as byte span.</returns>
+    public static implicit operator Memory<byte>(DoppelgangerStateUpdate packet) => packet._data; 
+}
+
+
+/// <summary>
+/// Is sent by the server when: The ice walker appeared on or disappeared from the path during the doppelganger event.
+/// Causes reaction on client side: The client shows or hides the ice walker icon on the progress bar of the doppelganger frame.
+/// </summary>
+public readonly struct DoppelgangerIceWalkerState
+{
+    /// <summary>
+    /// The state of the ice walker.
+    /// </summary>
+    public enum IceWalkerState
+    {
+        /// <summary>
+        /// The ice walker is present at the given position.
+        /// </summary>
+            Appeared = 0,
+
+        /// <summary>
+        /// The ice walker was killed or disappeared.
+        /// </summary>
+            Disappeared = 1,
+    }
+
+    private readonly Memory<byte> _data;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DoppelgangerIceWalkerState"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    public DoppelgangerIceWalkerState(Memory<byte> data)
+        : this(data, true)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DoppelgangerIceWalkerState"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    /// <param name="initialize">If set to <c>true</c>, the header data is automatically initialized and written to the underlying span.</param>
+    private DoppelgangerIceWalkerState(Memory<byte> data, bool initialize)
+    {
+        this._data = data;
+        if (initialize)
+        {
+            var header = this.Header;
+            header.Type = HeaderType;
+            header.Code = Code;
+            header.Length = (byte)Math.Min(data.Length, Length);
+            header.SubCode = SubCode;
+        }
+    }
+
+    /// <summary>
+    /// Gets the header type of this data packet.
+    /// </summary>
+    public static byte HeaderType => 0xC1;
+
+    /// <summary>
+    /// Gets the operation code of this data packet.
+    /// </summary>
+    public static byte Code => 0xBF;
+
+    /// <summary>
+    /// Gets the operation sub-code of this data packet.
+    /// The <see cref="Code" /> is used as a grouping key.
+    /// </summary>
+    public static byte SubCode => 0x11;
+
+    /// <summary>
+    /// Gets the initial length of this data packet. When the size is dynamic, this value may be bigger than actually needed.
+    /// </summary>
+    public static int Length => 6;
+
+    /// <summary>
+    /// Gets the header of this packet.
+    /// </summary>
+    public C1HeaderWithSubCode Header => new (this._data);
+
+    /// <summary>
+    /// Gets or sets the state.
+    /// </summary>
+    public DoppelgangerIceWalkerState.IceWalkerState State
+    {
+        get => (IceWalkerState)this._data.Span[4];
+        set => this._data.Span[4] = (byte)value;
+    }
+
+    /// <summary>
+    /// Gets or sets the position index of the ice walker on the path, between 0 (start) and 22 (magic circle).
+    /// </summary>
+    public byte Position
+    {
+        get => this._data.Span[5];
+        set => this._data.Span[5] = value;
+    }
+
+    /// <summary>
+    /// Performs an implicit conversion from a Memory of bytes to a <see cref="DoppelgangerIceWalkerState"/>.
+    /// </summary>
+    /// <param name="packet">The packet as span.</param>
+    /// <returns>The packet as struct.</returns>
+    public static implicit operator DoppelgangerIceWalkerState(Memory<byte> packet) => new (packet, false);
+
+    /// <summary>
+    /// Performs an implicit conversion from <see cref="DoppelgangerIceWalkerState"/> to a Memory of bytes.
+    /// </summary>
+    /// <param name="packet">The packet as struct.</param>
+    /// <returns>The packet as byte span.</returns>
+    public static implicit operator Memory<byte>(DoppelgangerIceWalkerState packet) => packet._data; 
+}
+
+
+/// <summary>
+/// Is sent by the server when: Periodically (every second) while the doppelganger event is running.
+/// Causes reaction on client side: The client updates the remaining time and the positions of the party members on the progress bar of the doppelganger frame. Players which are not included are no longer shown.
+/// </summary>
+public readonly struct DoppelgangerPlayInfo
+{
+    private readonly Memory<byte> _data;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DoppelgangerPlayInfo"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    public DoppelgangerPlayInfo(Memory<byte> data)
+        : this(data, true)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DoppelgangerPlayInfo"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    /// <param name="initialize">If set to <c>true</c>, the header data is automatically initialized and written to the underlying span.</param>
+    private DoppelgangerPlayInfo(Memory<byte> data, bool initialize)
+    {
+        this._data = data;
+        if (initialize)
+        {
+            var header = this.Header;
+            header.Type = HeaderType;
+            header.Code = Code;
+            header.Length = (byte)data.Length;
+            header.SubCode = SubCode;
+        }
+    }
+
+    /// <summary>
+    /// Gets the header type of this data packet.
+    /// </summary>
+    public static byte HeaderType => 0xC1;
+
+    /// <summary>
+    /// Gets the operation code of this data packet.
+    /// </summary>
+    public static byte Code => 0xBF;
+
+    /// <summary>
+    /// Gets the operation sub-code of this data packet.
+    /// The <see cref="Code" /> is used as a grouping key.
+    /// </summary>
+    public static byte SubCode => 0x12;
+
+    /// <summary>
+    /// Gets the header of this packet.
+    /// </summary>
+    public C1HeaderWithSubCode Header => new (this._data);
+
+    /// <summary>
+    /// Gets or sets the remaining seconds.
+    /// </summary>
+    public ushort RemainingSeconds
+    {
+        get => ReadUInt16LittleEndian(this._data.Span[4..]);
+        set => WriteUInt16LittleEndian(this._data.Span[4..], value);
+    }
+
+    /// <summary>
+    /// Gets or sets the player count.
+    /// </summary>
+    public byte PlayerCount
+    {
+        get => this._data.Span[6];
+        set => this._data.Span[6] = value;
+    }
+
+    /// <summary>
+    /// Gets the <see cref="PlayerPosition"/> of the specified index.
+    /// </summary>
+        public PlayerPosition this[int index] => new (this._data.Slice(8 + index * PlayerPosition.Length));
+
+    /// <summary>
+    /// Performs an implicit conversion from a Memory of bytes to a <see cref="DoppelgangerPlayInfo"/>.
+    /// </summary>
+    /// <param name="packet">The packet as span.</param>
+    /// <returns>The packet as struct.</returns>
+    public static implicit operator DoppelgangerPlayInfo(Memory<byte> packet) => new (packet, false);
+
+    /// <summary>
+    /// Performs an implicit conversion from <see cref="DoppelgangerPlayInfo"/> to a Memory of bytes.
+    /// </summary>
+    /// <param name="packet">The packet as struct.</param>
+    /// <returns>The packet as byte span.</returns>
+    public static implicit operator Memory<byte>(DoppelgangerPlayInfo packet) => packet._data; 
+
+    /// <summary>
+    /// Calculates the size of the packet for the specified count of <see cref="PlayerPosition"/>.
+    /// </summary>
+    /// <param name="playerPositionsCount">The count of <see cref="PlayerPosition"/> from which the size will be calculated.</param>
+        
+    public static int GetRequiredSize(int playerPositionsCount) => playerPositionsCount * PlayerPosition.Length + 8;
+
+
+/// <summary>
+/// The position of a player on the path..
+/// </summary>
+public readonly struct PlayerPosition
+{
+    private readonly Memory<byte> _data;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PlayerPosition"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    public PlayerPosition(Memory<byte> data)
+    {
+        this._data = data;
+    }
+
+    /// <summary>
+    /// Gets the initial length of this data packet. When the size is dynamic, this value may be bigger than actually needed.
+    /// </summary>
+    public static int Length => 4;
+
+    /// <summary>
+    /// Gets or sets the player id.
+    /// </summary>
+    public ushort PlayerId
+    {
+        get => ReadUInt16LittleEndian(this._data.Span);
+        set => WriteUInt16LittleEndian(this._data.Span, value);
+    }
+
+    /// <summary>
+    /// Gets or sets the map number of the player. It is ignored by the client.
+    /// </summary>
+    public byte MapNumber
+    {
+        get => this._data.Span[2];
+        set => this._data.Span[2] = value;
+    }
+
+    /// <summary>
+    /// Gets or sets the position index of the player on the path, between 0 (start) and 22 (magic circle).
+    /// </summary>
+    public byte Position
+    {
+        get => this._data.Span[3];
+        set => this._data.Span[3] = value;
+    }
+}
+}
+
+
+/// <summary>
+/// Is sent by the server when: The doppelganger event ended for the player.
+/// Causes reaction on client side: The client stops the timer and the event music, and shows a message box with the result.
+/// </summary>
+public readonly struct DoppelgangerResult
+{
+    /// <summary>
+    /// The result of the doppelganger event.
+    /// </summary>
+    public enum ResultType
+    {
+        /// <summary>
+        /// The party successfully defended the magic circle.
+        /// </summary>
+            Success = 0,
+
+        /// <summary>
+        /// The player failed, e.g. because the character died or left the event map.
+        /// </summary>
+            Failed = 1,
+
+        /// <summary>
+        /// The defense failed, because too many monsters reached the magic circle.
+        /// </summary>
+            MonstersReachedMagicCircle = 2,
+    }
+
+    private readonly Memory<byte> _data;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DoppelgangerResult"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    public DoppelgangerResult(Memory<byte> data)
+        : this(data, true)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DoppelgangerResult"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    /// <param name="initialize">If set to <c>true</c>, the header data is automatically initialized and written to the underlying span.</param>
+    private DoppelgangerResult(Memory<byte> data, bool initialize)
+    {
+        this._data = data;
+        if (initialize)
+        {
+            var header = this.Header;
+            header.Type = HeaderType;
+            header.Code = Code;
+            header.Length = (byte)Math.Min(data.Length, Length);
+            header.SubCode = SubCode;
+        }
+    }
+
+    /// <summary>
+    /// Gets the header type of this data packet.
+    /// </summary>
+    public static byte HeaderType => 0xC1;
+
+    /// <summary>
+    /// Gets the operation code of this data packet.
+    /// </summary>
+    public static byte Code => 0xBF;
+
+    /// <summary>
+    /// Gets the operation sub-code of this data packet.
+    /// The <see cref="Code" /> is used as a grouping key.
+    /// </summary>
+    public static byte SubCode => 0x13;
+
+    /// <summary>
+    /// Gets the initial length of this data packet. When the size is dynamic, this value may be bigger than actually needed.
+    /// </summary>
+    public static int Length => 12;
+
+    /// <summary>
+    /// Gets the header of this packet.
+    /// </summary>
+    public C1HeaderWithSubCode Header => new (this._data);
+
+    /// <summary>
+    /// Gets or sets the result.
+    /// </summary>
+    public DoppelgangerResult.ResultType Result
+    {
+        get => (ResultType)this._data.Span[4];
+        set => this._data.Span[4] = (byte)value;
+    }
+
+    /// <summary>
+    /// Gets or sets the experience which the player got as reward. It is not shown by the client. The field is aligned to 4 bytes, because the client structure is not packed.
+    /// </summary>
+    public uint RewardExperience
+    {
+        get => ReadUInt32LittleEndian(this._data.Span[8..]);
+        set => WriteUInt32LittleEndian(this._data.Span[8..], value);
+    }
+
+    /// <summary>
+    /// Performs an implicit conversion from a Memory of bytes to a <see cref="DoppelgangerResult"/>.
+    /// </summary>
+    /// <param name="packet">The packet as span.</param>
+    /// <returns>The packet as struct.</returns>
+    public static implicit operator DoppelgangerResult(Memory<byte> packet) => new (packet, false);
+
+    /// <summary>
+    /// Performs an implicit conversion from <see cref="DoppelgangerResult"/> to a Memory of bytes.
+    /// </summary>
+    /// <param name="packet">The packet as struct.</param>
+    /// <returns>The packet as byte span.</returns>
+    public static implicit operator Memory<byte>(DoppelgangerResult packet) => packet._data; 
+}
+
+
+/// <summary>
+/// Is sent by the server when: A monster reached the magic circle during the doppelganger event.
+/// Causes reaction on client side: The client updates the counter of monsters which passed the magic circle.
+/// </summary>
+public readonly struct DoppelgangerMonsterGoal
+{
+    private readonly Memory<byte> _data;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DoppelgangerMonsterGoal"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    public DoppelgangerMonsterGoal(Memory<byte> data)
+        : this(data, true)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DoppelgangerMonsterGoal"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    /// <param name="initialize">If set to <c>true</c>, the header data is automatically initialized and written to the underlying span.</param>
+    private DoppelgangerMonsterGoal(Memory<byte> data, bool initialize)
+    {
+        this._data = data;
+        if (initialize)
+        {
+            var header = this.Header;
+            header.Type = HeaderType;
+            header.Code = Code;
+            header.Length = (byte)Math.Min(data.Length, Length);
+            header.SubCode = SubCode;
+        }
+    }
+
+    /// <summary>
+    /// Gets the header type of this data packet.
+    /// </summary>
+    public static byte HeaderType => 0xC1;
+
+    /// <summary>
+    /// Gets the operation code of this data packet.
+    /// </summary>
+    public static byte Code => 0xBF;
+
+    /// <summary>
+    /// Gets the operation sub-code of this data packet.
+    /// The <see cref="Code" /> is used as a grouping key.
+    /// </summary>
+    public static byte SubCode => 0x14;
+
+    /// <summary>
+    /// Gets the initial length of this data packet. When the size is dynamic, this value may be bigger than actually needed.
+    /// </summary>
+    public static int Length => 6;
+
+    /// <summary>
+    /// Gets the header of this packet.
+    /// </summary>
+    public C1HeaderWithSubCode Header => new (this._data);
+
+    /// <summary>
+    /// Gets or sets the number of monsters which may reach the magic circle until the event fails.
+    /// </summary>
+    public byte MaximumGoalCount
+    {
+        get => this._data.Span[4];
+        set => this._data.Span[4] = value;
+    }
+
+    /// <summary>
+    /// Gets or sets the number of monsters which reached the magic circle.
+    /// </summary>
+    public byte GoalCount
+    {
+        get => this._data.Span[5];
+        set => this._data.Span[5] = value;
+    }
+
+    /// <summary>
+    /// Performs an implicit conversion from a Memory of bytes to a <see cref="DoppelgangerMonsterGoal"/>.
+    /// </summary>
+    /// <param name="packet">The packet as span.</param>
+    /// <returns>The packet as struct.</returns>
+    public static implicit operator DoppelgangerMonsterGoal(Memory<byte> packet) => new (packet, false);
+
+    /// <summary>
+    /// Performs an implicit conversion from <see cref="DoppelgangerMonsterGoal"/> to a Memory of bytes.
+    /// </summary>
+    /// <param name="packet">The packet as struct.</param>
+    /// <returns>The packet as byte span.</returns>
+    public static implicit operator Memory<byte>(DoppelgangerMonsterGoal packet) => packet._data; 
+}
+
+
+/// <summary>
 /// Is sent by the server when: The server validated or changed the status of the MU Helper.
 /// Causes reaction on client side: The client toggle the MU Helper status.
 /// </summary>
@@ -29798,6 +30587,26 @@ public readonly struct UpdateMiniGameState
         /// The chaos castle game is finished. Chaos Castle Event shuts down (in x seconds)".
         /// </summary>
             ChaosCastleFinished = 13,
+
+        /// <summary>
+        /// The entrance of the doppelganger event closes in 30 seconds. The client shows the countdown only on the doppelganger maps.
+        /// </summary>
+            DoppelgangerEntranceClosing = 16,
+
+        /// <summary>
+        /// The doppelganger event starts in 30 seconds. The client shows the countdown only on the doppelganger maps.
+        /// </summary>
+            DoppelgangerStarting = 17,
+
+        /// <summary>
+        /// The ice walker has to be killed within 30 seconds. The client shows the countdown only on the doppelganger maps.
+        /// </summary>
+            DoppelgangerIceWalkerCountdown = 18,
+
+        /// <summary>
+        /// The doppelganger event ends in 30 seconds. The client shows the countdown only on the doppelganger maps.
+        /// </summary>
+            DoppelgangerEnding = 19,
     }
 
     private readonly Memory<byte> _data;
@@ -35264,6 +36073,800 @@ public readonly struct MiniMapNpcPosition
         set => this._data.Span[2] = value;
     }
 }
+}
+
+
+/// <summary>
+/// Is sent by the server when: The player requests state information from the Kanturu gateway NPC.
+/// Causes reaction on client side: The client shows the Kanturu entry dialog (INTERFACE_KANTURU2ND_ENTERNPC) with event state, detail state, whether entry is possible, current player count and remaining time.
+/// </summary>
+public readonly struct KanturuStateInfo
+{
+    /// <summary>
+    /// Main state of the Kanturu event, matching the client KANTURU_STATE_TYPE enum.
+    /// </summary>
+    public enum StateType
+    {
+        /// <summary>
+        /// No active state.
+        /// </summary>
+            None = 0,
+
+        /// <summary>
+        /// Waiting for players to enter before the event starts.
+        /// </summary>
+            Standby = 1,
+
+        /// <summary>
+        /// Maya battle phase covering Phases 1 through 3 and their boss waves.
+        /// </summary>
+            MayaBattle = 2,
+
+        /// <summary>
+        /// Nightmare battle phase after all three Maya phases are cleared.
+        /// </summary>
+            NightmareBattle = 3,
+
+        /// <summary>
+        /// Tower of Refinement phase; opens after Nightmare is defeated.
+        /// </summary>
+            Tower = 4,
+
+        /// <summary>
+        /// Event has ended.
+        /// </summary>
+            End = 5,
+    }
+
+    private readonly Memory<byte> _data;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="KanturuStateInfo"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    public KanturuStateInfo(Memory<byte> data)
+        : this(data, true)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="KanturuStateInfo"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    /// <param name="initialize">If set to <c>true</c>, the header data is automatically initialized and written to the underlying span.</param>
+    private KanturuStateInfo(Memory<byte> data, bool initialize)
+    {
+        this._data = data;
+        if (initialize)
+        {
+            var header = this.Header;
+            header.Type = HeaderType;
+            header.Code = Code;
+            header.Length = (byte)Math.Min(data.Length, Length);
+            header.SubCode = SubCode;
+        }
+    }
+
+    /// <summary>
+    /// Gets the header type of this data packet.
+    /// </summary>
+    public static byte HeaderType => 0xC1;
+
+    /// <summary>
+    /// Gets the operation code of this data packet.
+    /// </summary>
+    public static byte Code => 0xD1;
+
+    /// <summary>
+    /// Gets the operation sub-code of this data packet.
+    /// The <see cref="Code" /> is used as a grouping key.
+    /// </summary>
+    public static byte SubCode => 0x00;
+
+    /// <summary>
+    /// Gets the initial length of this data packet. When the size is dynamic, this value may be bigger than actually needed.
+    /// </summary>
+    public static int Length => 12;
+
+    /// <summary>
+    /// Gets the header of this packet.
+    /// </summary>
+    public C1HeaderWithSubCode Header => new (this._data);
+
+    /// <summary>
+    /// Gets or sets the state.
+    /// </summary>
+    public KanturuStateInfo.StateType State
+    {
+        get => (StateType)this._data.Span[4];
+        set => this._data.Span[4] = (byte)value;
+    }
+
+    /// <summary>
+    /// Gets or sets detail state; semantics depend on the main State field. See the game logic enums for per-state values.
+    /// </summary>
+    public byte DetailState
+    {
+        get => this._data.Span[5];
+        set => this._data.Span[5] = value;
+    }
+
+    /// <summary>
+    /// Gets or sets 1 = entrance is open (Enter button enabled); 0 = entrance closed.
+    /// </summary>
+    public bool CanEnter
+    {
+        get => this._data.Span[6..].GetBoolean();
+        set => this._data.Span[6..].SetBoolean(value);
+    }
+
+    /// <summary>
+    /// Gets or sets number of players currently inside the event map (capped at 255).
+    /// </summary>
+    public byte UserCount
+    {
+        get => this._data.Span[7];
+        set => this._data.Span[7] = value;
+    }
+
+    /// <summary>
+    /// Gets or sets remaining time in seconds. Standby: seconds until event opens. Tower: seconds the tower has been open. Otherwise 0.
+    /// </summary>
+    public uint RemainSeconds
+    {
+        get => ReadUInt32LittleEndian(this._data.Span[8..]);
+        set => WriteUInt32LittleEndian(this._data.Span[8..], value);
+    }
+
+    /// <summary>
+    /// Performs an implicit conversion from a Memory of bytes to a <see cref="KanturuStateInfo"/>.
+    /// </summary>
+    /// <param name="packet">The packet as span.</param>
+    /// <returns>The packet as struct.</returns>
+    public static implicit operator KanturuStateInfo(Memory<byte> packet) => new (packet, false);
+
+    /// <summary>
+    /// Performs an implicit conversion from <see cref="KanturuStateInfo"/> to a Memory of bytes.
+    /// </summary>
+    /// <param name="packet">The packet as struct.</param>
+    /// <returns>The packet as byte span.</returns>
+    public static implicit operator Memory<byte>(KanturuStateInfo packet) => packet._data; 
+}
+
+
+/// <summary>
+/// Is sent by the server when: The player attempted to enter the Kanturu event through the gateway NPC.
+/// Causes reaction on client side: The client closes the NPC animation and shows an error popup on failure. On success the player has already been teleported to the event map.
+/// </summary>
+public readonly struct KanturuEnterResult
+{
+    /// <summary>
+    /// Result of the Kanturu enter request.
+    /// </summary>
+    public enum EnterResult
+    {
+        /// <summary>
+        /// Entry failed (generic failure).
+        /// </summary>
+            Failed = 0,
+
+        /// <summary>
+        /// The player has been successfully entered into the event.
+        /// </summary>
+            Success = 1,
+    }
+
+    private readonly Memory<byte> _data;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="KanturuEnterResult"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    public KanturuEnterResult(Memory<byte> data)
+        : this(data, true)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="KanturuEnterResult"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    /// <param name="initialize">If set to <c>true</c>, the header data is automatically initialized and written to the underlying span.</param>
+    private KanturuEnterResult(Memory<byte> data, bool initialize)
+    {
+        this._data = data;
+        if (initialize)
+        {
+            var header = this.Header;
+            header.Type = HeaderType;
+            header.Code = Code;
+            header.Length = (byte)Math.Min(data.Length, Length);
+            header.SubCode = SubCode;
+        }
+    }
+
+    /// <summary>
+    /// Gets the header type of this data packet.
+    /// </summary>
+    public static byte HeaderType => 0xC1;
+
+    /// <summary>
+    /// Gets the operation code of this data packet.
+    /// </summary>
+    public static byte Code => 0xD1;
+
+    /// <summary>
+    /// Gets the operation sub-code of this data packet.
+    /// The <see cref="Code" /> is used as a grouping key.
+    /// </summary>
+    public static byte SubCode => 0x01;
+
+    /// <summary>
+    /// Gets the initial length of this data packet. When the size is dynamic, this value may be bigger than actually needed.
+    /// </summary>
+    public static int Length => 5;
+
+    /// <summary>
+    /// Gets the header of this packet.
+    /// </summary>
+    public C1HeaderWithSubCode Header => new (this._data);
+
+    /// <summary>
+    /// Gets or sets the result.
+    /// </summary>
+    public KanturuEnterResult.EnterResult Result
+    {
+        get => (EnterResult)this._data.Span[4];
+        set => this._data.Span[4] = (byte)value;
+    }
+
+    /// <summary>
+    /// Performs an implicit conversion from a Memory of bytes to a <see cref="KanturuEnterResult"/>.
+    /// </summary>
+    /// <param name="packet">The packet as span.</param>
+    /// <returns>The packet as struct.</returns>
+    public static implicit operator KanturuEnterResult(Memory<byte> packet) => new (packet, false);
+
+    /// <summary>
+    /// Performs an implicit conversion from <see cref="KanturuEnterResult"/> to a Memory of bytes.
+    /// </summary>
+    /// <param name="packet">The packet as struct.</param>
+    /// <returns>The packet as byte span.</returns>
+    public static implicit operator Memory<byte>(KanturuEnterResult packet) => packet._data; 
+}
+
+
+/// <summary>
+/// Is sent by the server when: The Kanturu event transitions to a new phase or sub-phase.
+/// Causes reaction on client side: The client shows or hides the in-map HUD, switches background music, and when entering the Tower state reloads the barrier-open terrain file (EncTerrain_n_01.att) to visually remove the Elphis barrier.
+/// </summary>
+public readonly struct KanturuStateChange
+{
+    /// <summary>
+    /// Main state; see KanturuStateInfo.StateType for value descriptions.
+    /// </summary>
+    public enum StateType
+    {
+        /// <summary>
+        /// No active state.
+        /// </summary>
+            None = 0,
+
+        /// <summary>
+        /// Standby phase; the event is waiting for players to enter.
+        /// </summary>
+            Standby = 1,
+
+        /// <summary>
+        /// Maya battle phase, which consists of three monster waves and the boss fights against her hands.
+        /// </summary>
+            MayaBattle = 2,
+
+        /// <summary>
+        /// Nightmare battle phase after all three Maya phases are cleared.
+        /// </summary>
+            NightmareBattle = 3,
+
+        /// <summary>
+        /// Tower of Refinement phase; opens after Nightmare is defeated.
+        /// </summary>
+            Tower = 4,
+
+        /// <summary>
+        /// Event has ended.
+        /// </summary>
+            End = 5,
+    }
+
+    private readonly Memory<byte> _data;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="KanturuStateChange"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    public KanturuStateChange(Memory<byte> data)
+        : this(data, true)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="KanturuStateChange"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    /// <param name="initialize">If set to <c>true</c>, the header data is automatically initialized and written to the underlying span.</param>
+    private KanturuStateChange(Memory<byte> data, bool initialize)
+    {
+        this._data = data;
+        if (initialize)
+        {
+            var header = this.Header;
+            header.Type = HeaderType;
+            header.Code = Code;
+            header.Length = (byte)Math.Min(data.Length, Length);
+            header.SubCode = SubCode;
+        }
+    }
+
+    /// <summary>
+    /// Gets the header type of this data packet.
+    /// </summary>
+    public static byte HeaderType => 0xC1;
+
+    /// <summary>
+    /// Gets the operation code of this data packet.
+    /// </summary>
+    public static byte Code => 0xD1;
+
+    /// <summary>
+    /// Gets the operation sub-code of this data packet.
+    /// The <see cref="Code" /> is used as a grouping key.
+    /// </summary>
+    public static byte SubCode => 0x03;
+
+    /// <summary>
+    /// Gets the initial length of this data packet. When the size is dynamic, this value may be bigger than actually needed.
+    /// </summary>
+    public static int Length => 6;
+
+    /// <summary>
+    /// Gets the header of this packet.
+    /// </summary>
+    public C1HeaderWithSubCode Header => new (this._data);
+
+    /// <summary>
+    /// Gets or sets refers to the KanturuStateInfo.StateType enum values.
+    /// </summary>
+    public KanturuStateChange.StateType State
+    {
+        get => (StateType)this._data.Span[4];
+        set => this._data.Span[4] = (byte)value;
+    }
+
+    /// <summary>
+    /// Gets or sets detail state within the main state. Maya battle: 0=none, 2=notify, 3=monster1, 4=maya1, 8=monster2, 9=maya2, 13=monster3, 14=maya3, 16=endcycle. Nightmare: 0=none, 1=idle, 2=intro, 3=battle, 4=end. Tower: 0=none, 1=revitalization, 2=notify, 3=close.
+    /// </summary>
+    public byte DetailState
+    {
+        get => this._data.Span[5];
+        set => this._data.Span[5] = value;
+    }
+
+    /// <summary>
+    /// Performs an implicit conversion from a Memory of bytes to a <see cref="KanturuStateChange"/>.
+    /// </summary>
+    /// <param name="packet">The packet as span.</param>
+    /// <returns>The packet as struct.</returns>
+    public static implicit operator KanturuStateChange(Memory<byte> packet) => new (packet, false);
+
+    /// <summary>
+    /// Performs an implicit conversion from <see cref="KanturuStateChange"/> to a Memory of bytes.
+    /// </summary>
+    /// <param name="packet">The packet as struct.</param>
+    /// <returns>The packet as byte span.</returns>
+    public static implicit operator Memory<byte>(KanturuStateChange packet) => packet._data; 
+}
+
+
+/// <summary>
+/// Is sent by the server when: The Kanturu event ends with a victory or defeat outcome.
+/// Causes reaction on client side: The client displays the Success_kantru.tga overlay on victory or the Failure_kantru.tga overlay on defeat.
+/// </summary>
+public readonly struct KanturuBattleResult
+{
+    /// <summary>
+    /// Outcome of the Kanturu battle.
+    /// </summary>
+    public enum BattleResult
+    {
+        /// <summary>
+        /// The event ended in failure; shows Failure_kantru.tga.
+        /// </summary>
+            Failure = 0,
+
+        /// <summary>
+        /// Nightmare was defeated; shows Success_kantru.tga.
+        /// </summary>
+            Victory = 1,
+    }
+
+    private readonly Memory<byte> _data;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="KanturuBattleResult"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    public KanturuBattleResult(Memory<byte> data)
+        : this(data, true)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="KanturuBattleResult"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    /// <param name="initialize">If set to <c>true</c>, the header data is automatically initialized and written to the underlying span.</param>
+    private KanturuBattleResult(Memory<byte> data, bool initialize)
+    {
+        this._data = data;
+        if (initialize)
+        {
+            var header = this.Header;
+            header.Type = HeaderType;
+            header.Code = Code;
+            header.Length = (byte)Math.Min(data.Length, Length);
+            header.SubCode = SubCode;
+        }
+    }
+
+    /// <summary>
+    /// Gets the header type of this data packet.
+    /// </summary>
+    public static byte HeaderType => 0xC1;
+
+    /// <summary>
+    /// Gets the operation code of this data packet.
+    /// </summary>
+    public static byte Code => 0xD1;
+
+    /// <summary>
+    /// Gets the operation sub-code of this data packet.
+    /// The <see cref="Code" /> is used as a grouping key.
+    /// </summary>
+    public static byte SubCode => 0x04;
+
+    /// <summary>
+    /// Gets the initial length of this data packet. When the size is dynamic, this value may be bigger than actually needed.
+    /// </summary>
+    public static int Length => 5;
+
+    /// <summary>
+    /// Gets the header of this packet.
+    /// </summary>
+    public C1HeaderWithSubCode Header => new (this._data);
+
+    /// <summary>
+    /// Gets or sets the result.
+    /// </summary>
+    public KanturuBattleResult.BattleResult Result
+    {
+        get => (BattleResult)this._data.Span[4];
+        set => this._data.Span[4] = (byte)value;
+    }
+
+    /// <summary>
+    /// Performs an implicit conversion from a Memory of bytes to a <see cref="KanturuBattleResult"/>.
+    /// </summary>
+    /// <param name="packet">The packet as span.</param>
+    /// <returns>The packet as struct.</returns>
+    public static implicit operator KanturuBattleResult(Memory<byte> packet) => new (packet, false);
+
+    /// <summary>
+    /// Performs an implicit conversion from <see cref="KanturuBattleResult"/> to a Memory of bytes.
+    /// </summary>
+    /// <param name="packet">The packet as struct.</param>
+    /// <returns>The packet as byte span.</returns>
+    public static implicit operator Memory<byte>(KanturuBattleResult packet) => packet._data; 
+}
+
+
+/// <summary>
+/// Is sent by the server when: A timed phase begins in the Kanturu event.
+/// Causes reaction on client side: The client starts a countdown timer shown in the Kanturu HUD. The value is divided by 1000 to obtain seconds.
+/// </summary>
+public readonly struct KanturuTimeLimit
+{
+    private readonly Memory<byte> _data;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="KanturuTimeLimit"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    public KanturuTimeLimit(Memory<byte> data)
+        : this(data, true)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="KanturuTimeLimit"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    /// <param name="initialize">If set to <c>true</c>, the header data is automatically initialized and written to the underlying span.</param>
+    private KanturuTimeLimit(Memory<byte> data, bool initialize)
+    {
+        this._data = data;
+        if (initialize)
+        {
+            var header = this.Header;
+            header.Type = HeaderType;
+            header.Code = Code;
+            header.Length = (byte)Math.Min(data.Length, Length);
+            header.SubCode = SubCode;
+        }
+    }
+
+    /// <summary>
+    /// Gets the header type of this data packet.
+    /// </summary>
+    public static byte HeaderType => 0xC1;
+
+    /// <summary>
+    /// Gets the operation code of this data packet.
+    /// </summary>
+    public static byte Code => 0xD1;
+
+    /// <summary>
+    /// Gets the operation sub-code of this data packet.
+    /// The <see cref="Code" /> is used as a grouping key.
+    /// </summary>
+    public static byte SubCode => 0x05;
+
+    /// <summary>
+    /// Gets the initial length of this data packet. When the size is dynamic, this value may be bigger than actually needed.
+    /// </summary>
+    public static int Length => 8;
+
+    /// <summary>
+    /// Gets the header of this packet.
+    /// </summary>
+    public C1HeaderWithSubCode Header => new (this._data);
+
+    /// <summary>
+    /// Gets or sets countdown duration in milliseconds.
+    /// </summary>
+    public uint TimeLimitMilliseconds
+    {
+        get => ReadUInt32LittleEndian(this._data.Span[4..]);
+        set => WriteUInt32LittleEndian(this._data.Span[4..], value);
+    }
+
+    /// <summary>
+    /// Performs an implicit conversion from a Memory of bytes to a <see cref="KanturuTimeLimit"/>.
+    /// </summary>
+    /// <param name="packet">The packet as span.</param>
+    /// <returns>The packet as struct.</returns>
+    public static implicit operator KanturuTimeLimit(Memory<byte> packet) => new (packet, false);
+
+    /// <summary>
+    /// Performs an implicit conversion from <see cref="KanturuTimeLimit"/> to a Memory of bytes.
+    /// </summary>
+    /// <param name="packet">The packet as struct.</param>
+    /// <returns>The packet as byte span.</returns>
+    public static implicit operator Memory<byte>(KanturuTimeLimit packet) => packet._data; 
+}
+
+
+/// <summary>
+/// Is sent by the server when: The Maya body executes a wide-area attack during the Maya battle phase.
+/// Causes reaction on client side: The client calls MayaSceneMayaAction(type) which plays one of two visual sequences on the Maya body model: storm (0) or stone-rain (1). This is a purely cosmetic packet — damage is handled server-side.
+/// </summary>
+public readonly struct KanturuMayaWideAreaAttack
+{
+    /// <summary>
+    /// Visual type of the Maya wide-area attack.
+    /// </summary>
+    public enum AttackType
+    {
+        /// <summary>
+        /// Stone-storm effect (MODEL_STORM3 plus falling debris around the hero).
+        /// </summary>
+            Storm = 0,
+
+        /// <summary>
+        /// Stone-rain effect (MODEL_MAYASTONE projectiles falling on the hero).
+        /// </summary>
+            Rain = 1,
+    }
+
+    private readonly Memory<byte> _data;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="KanturuMayaWideAreaAttack"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    public KanturuMayaWideAreaAttack(Memory<byte> data)
+        : this(data, true)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="KanturuMayaWideAreaAttack"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    /// <param name="initialize">If set to <c>true</c>, the header data is automatically initialized and written to the underlying span.</param>
+    private KanturuMayaWideAreaAttack(Memory<byte> data, bool initialize)
+    {
+        this._data = data;
+        if (initialize)
+        {
+            var header = this.Header;
+            header.Type = HeaderType;
+            header.Code = Code;
+            header.Length = (byte)Math.Min(data.Length, Length);
+            header.SubCode = SubCode;
+        }
+    }
+
+    /// <summary>
+    /// Gets the header type of this data packet.
+    /// </summary>
+    public static byte HeaderType => 0xC1;
+
+    /// <summary>
+    /// Gets the operation code of this data packet.
+    /// </summary>
+    public static byte Code => 0xD1;
+
+    /// <summary>
+    /// Gets the operation sub-code of this data packet.
+    /// The <see cref="Code" /> is used as a grouping key.
+    /// </summary>
+    public static byte SubCode => 0x06;
+
+    /// <summary>
+    /// Gets the initial length of this data packet. When the size is dynamic, this value may be bigger than actually needed.
+    /// </summary>
+    public static int Length => 7;
+
+    /// <summary>
+    /// Gets the header of this packet.
+    /// </summary>
+    public C1HeaderWithSubCode Header => new (this._data);
+
+    /// <summary>
+    /// Gets or sets high byte of the Maya object class; ignored by the client.
+    /// </summary>
+    public byte ObjClassH
+    {
+        get => this._data.Span[4];
+        set => this._data.Span[4] = value;
+    }
+
+    /// <summary>
+    /// Gets or sets low byte of the Maya object class; ignored by the client.
+    /// </summary>
+    public byte ObjClassL
+    {
+        get => this._data.Span[5];
+        set => this._data.Span[5] = value;
+    }
+
+    /// <summary>
+    /// Gets or sets the type.
+    /// </summary>
+    public KanturuMayaWideAreaAttack.AttackType Type
+    {
+        get => (AttackType)this._data.Span[6];
+        set => this._data.Span[6] = (byte)value;
+    }
+
+    /// <summary>
+    /// Performs an implicit conversion from a Memory of bytes to a <see cref="KanturuMayaWideAreaAttack"/>.
+    /// </summary>
+    /// <param name="packet">The packet as span.</param>
+    /// <returns>The packet as struct.</returns>
+    public static implicit operator KanturuMayaWideAreaAttack(Memory<byte> packet) => new (packet, false);
+
+    /// <summary>
+    /// Performs an implicit conversion from <see cref="KanturuMayaWideAreaAttack"/> to a Memory of bytes.
+    /// </summary>
+    /// <param name="packet">The packet as struct.</param>
+    /// <returns>The packet as byte span.</returns>
+    public static implicit operator Memory<byte>(KanturuMayaWideAreaAttack packet) => packet._data; 
+}
+
+
+/// <summary>
+/// Is sent by the server when: A monster is killed or the player count changes during the Kanturu event.
+/// Causes reaction on client side: The client updates the monster count and user count numbers displayed in the Kanturu HUD.
+/// </summary>
+public readonly struct KanturuMonsterUserCount
+{
+    private readonly Memory<byte> _data;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="KanturuMonsterUserCount"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    public KanturuMonsterUserCount(Memory<byte> data)
+        : this(data, true)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="KanturuMonsterUserCount"/> struct.
+    /// </summary>
+    /// <param name="data">The underlying data.</param>
+    /// <param name="initialize">If set to <c>true</c>, the header data is automatically initialized and written to the underlying span.</param>
+    private KanturuMonsterUserCount(Memory<byte> data, bool initialize)
+    {
+        this._data = data;
+        if (initialize)
+        {
+            var header = this.Header;
+            header.Type = HeaderType;
+            header.Code = Code;
+            header.Length = (byte)Math.Min(data.Length, Length);
+            header.SubCode = SubCode;
+        }
+    }
+
+    /// <summary>
+    /// Gets the header type of this data packet.
+    /// </summary>
+    public static byte HeaderType => 0xC1;
+
+    /// <summary>
+    /// Gets the operation code of this data packet.
+    /// </summary>
+    public static byte Code => 0xD1;
+
+    /// <summary>
+    /// Gets the operation sub-code of this data packet.
+    /// The <see cref="Code" /> is used as a grouping key.
+    /// </summary>
+    public static byte SubCode => 0x07;
+
+    /// <summary>
+    /// Gets the initial length of this data packet. When the size is dynamic, this value may be bigger than actually needed.
+    /// </summary>
+    public static int Length => 6;
+
+    /// <summary>
+    /// Gets the header of this packet.
+    /// </summary>
+    public C1HeaderWithSubCode Header => new (this._data);
+
+    /// <summary>
+    /// Gets or sets number of monsters still alive in the current wave (capped at 255).
+    /// </summary>
+    public byte MonsterCount
+    {
+        get => this._data.Span[4];
+        set => this._data.Span[4] = value;
+    }
+
+    /// <summary>
+    /// Gets or sets number of players currently inside the event map (capped at 255).
+    /// </summary>
+    public byte UserCount
+    {
+        get => this._data.Span[5];
+        set => this._data.Span[5] = value;
+    }
+
+    /// <summary>
+    /// Performs an implicit conversion from a Memory of bytes to a <see cref="KanturuMonsterUserCount"/>.
+    /// </summary>
+    /// <param name="packet">The packet as span.</param>
+    /// <returns>The packet as struct.</returns>
+    public static implicit operator KanturuMonsterUserCount(Memory<byte> packet) => new (packet, false);
+
+    /// <summary>
+    /// Performs an implicit conversion from <see cref="KanturuMonsterUserCount"/> to a Memory of bytes.
+    /// </summary>
+    /// <param name="packet">The packet as struct.</param>
+    /// <returns>The packet as byte span.</returns>
+    public static implicit operator Memory<byte>(KanturuMonsterUserCount packet) => packet._data; 
 }
     /// <summary>
     /// Defines the role of a guild member.

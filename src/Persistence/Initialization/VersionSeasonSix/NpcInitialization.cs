@@ -395,6 +395,7 @@ internal partial class NpcInitialization : Version095d.NpcInitialization
             def.Number = 223;
             def.Designation = "Senior";
             def.ObjectKind = NpcObjectKind.PassiveNpc;
+            def.NpcWindow = NpcWindow.CastleSeniorNPC;
             this.GameConfiguration.Monsters.Add(def);
             def.SetGuid(def.Number);
         }
@@ -770,6 +771,7 @@ internal partial class NpcInitialization : Version095d.NpcInitialization
             var def = this.Context.CreateNew<MonsterDefinition>();
             def.Number = 540;
             def.Designation = "Lugard";
+            def.NpcWindow = NpcWindow.LugardDoppelgangerEntry;
             def.ObjectKind = NpcObjectKind.PassiveNpc;
             this.GameConfiguration.Monsters.Add(def);
             def.SetGuid(def.Number);
