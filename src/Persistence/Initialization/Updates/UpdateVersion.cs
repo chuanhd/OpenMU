@@ -1,4 +1,4 @@
-// <copyright file="UpdateVersion.cs" company="MUnique">
+﻿// <copyright file="UpdateVersion.cs" company="MUnique">
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 // </copyright>
 
@@ -549,4 +549,44 @@ public enum UpdateVersion
     /// The version of the <see cref="IncreasePotionStackSizeUpdatePlugIn"/>.
     /// </summary>
     IncreasePotionStackSize = 108,
+
+    /// <summary>
+    /// The version of the <see cref="ConfigureCastleSiegeEconomyUpdatePlugIn"/>.
+    /// </summary>
+    ConfigureCastleSiegeEconomy = 109,
+
+    /// <summary>
+    /// The version of the <see cref="RemoveDuplicateStatAttributesPlugIn075"/>.
+    /// </summary>
+    RemoveDuplicateStatAttributes075 = 110,
+
+    /// <summary>
+    /// The version of the <see cref="RemoveDuplicateStatAttributesPlugIn095D"/>.
+    /// </summary>
+    RemoveDuplicateStatAttributes095d = 111,
+
+    /// <summary>
+    /// The version of the <see cref="RemoveDuplicateStatAttributesPlugInSeason6"/>.
+    /// </summary>
+    RemoveDuplicateStatAttributesSeason6 = 112,
+
+    /// <summary>
+    /// The version of the <see cref="ConfigureCastleSiegeLifeStoneUpdatePlugIn"/>.
+    /// </summary>
+    ConfigureCastleSiegeLifeStone = 113,
+
+    /// <summary>
+    /// The version of the <see cref="AddKanturuDataUpdatePlugIn"/>.
+    /// </summary>
+    AddKanturuData = 114,
+
+    /// <summary>
+    /// The version of the <see cref="AddKanturuMapContentUpdatePlugIn"/>.
+    /// </summary>
+    AddKanturuMapContent = 115,
+
+    /// <summary>
+    /// The version of the <see cref="AddDoppelgangerDataUpdatePlugIn"/>.
+    /// </summary>
+    AddDoppelgangerData = 116,
 }
